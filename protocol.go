@@ -142,15 +142,34 @@ func handleClient(client net.Conn) {
 }
 
 func writeReply(w io.Writer, reply cmdReply) (err error) {
+	if reply == nil {
+		return writeNil(w)
+	}
 	switch reply.(type) {
 	case string:
 		err = writeString(w, reply.(string))
 	case []byte:
 		err = writeBulk(w, reply.([]byte))
+	case int:
+		err = writeInt(w, reply.(int))
 	case error:
 		err = writeError(w, reply.(error).Error())
+	case []cmdReply:
+		err = writeMultibulk(w, reply.([]cmdReply))
+	default:
+		panic("Invalid reply type")
 	}
 	return
+}
+
+func writeNil(w io.Writer) error {
+	_, err := w.Write([]byte("*-1\r\n"))
+	return err
+}
+
+func writeInt(w io.Writer, n int) error {
+	_, err := w.Write([]byte(":" + strconv.Itoa(n) + "\r\n"))
+	return err
 }
 
 func writeString(w io.Writer, s string) error {
@@ -159,6 +178,10 @@ func writeString(w io.Writer, s string) error {
 }
 
 func writeBulk(w io.Writer, b []byte) error {
+	if b == nil {
+		_, err := w.Write([]byte("$-1\r\n"))
+		return err
+	}
 	// TODO: find a more efficient way of doing this
 	_, err := w.Write([]byte("$" + strconv.Itoa(len(b)) + "\r\n"))
 	if err != nil {
@@ -170,6 +193,20 @@ func writeBulk(w io.Writer, b []byte) error {
 	}
 	_, err = w.Write([]byte("\r\n"))
 	return err
+}
+
+func writeMultibulk(w io.Writer, reply []cmdReply) error {
+	_, err := w.Write([]byte("*" + strconv.Itoa(len(reply)) + "\r\n"))
+	if err != nil {
+		return err
+	}
+	for _, r := range reply {
+		err = writeReply(w, r)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeError(w io.Writer, msg string) error {
