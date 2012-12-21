@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/jmhodges/levigo"
 )
@@ -33,11 +34,17 @@ func openDB() {
 
 	var err error
 	DB, err = levigo.Open("db", opts)
+	maybeFatal(err)
+}
+
+func maybeFatal(err error) {
 	if err != nil {
-		panic(err)
+		fmt.Printf("Fatal error: %s\n", err)
+		os.Exit(1)
 	}
 }
 
 func main() {
 	openDB()
+	listen()
 }
