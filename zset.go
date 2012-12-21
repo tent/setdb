@@ -123,7 +123,7 @@ func zscoreKey(k, member []byte, score float64) []byte {
  */
 
 func writeByteSortableFloat(b []byte, f float64) {
-	if f < 0 {
+	if math.Signbit(f) {
 		binary.BigEndian.PutUint64(b, math.Float64bits(f))
 		for i, v := range b[:8] {
 			b[i] = v ^ 255
