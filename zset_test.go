@@ -31,54 +31,41 @@ func MaybeFail(c *C, err error) {
 	}
 }
 
-var zaddTests = []struct {
-	args    string
-	newKeys int
+var zsetTests = []struct {
+	command  string
+	args     string
+	response interface{}
 }{
-	{"foo 1 bar", 1},
-	{"foo 1 bar", 0},
-	{"foo 2 bar", 0},
-	{"foo 1 baz", 1},
-	{"foo 1 baz 2 bar", 0},
-	{"foo 5.1 asdf 2 buzz 1 baz 2 bar", 2},
-	{"asdf 0.1 bar", 1},
-	{"fooz 4e29 bar 0.2 baz", 2},
+	{"zadd", "foo 1 bar", 1},
+	{"zadd", "foo 1 bar", 0},
+	{"zadd", "foo 2 bar", 0},
+	{"zadd", "foo 1 baz", 1},
+	{"zadd", "foo 1 baz 2 bar", 0},
+	{"zadd", "foo 5.1 asdf 2 buzz 1 baz 2 bar", 2},
+	{"zadd", "asdf 0.1 bar", 1},
+	{"zadd", "fooz 4e29 bar 0.2 baz", 2},
+	{"zscore", "foo bar", []byte("2")},
+	{"zscore", "foo baz", []byte("1")},
+	{"zscore", "asdf bar", []byte("0.1")},
+	{"zscore", "fooz bar", []byte("4e+29")},
+	{"zincrby", "foo 0.1 bar", []byte("2.1")},
+	{"zincrby", "foo 1.1 bazz", []byte("1.1")},
 }
 
-func (s ZSetSuite) TestZadd(c *C) {
-	for _, t := range zaddTests {
-		wb := levigo.NewWriteBatch()
-		res := zadd(bytes.Split([]byte(t.args), []byte(" ")), wb)
-		if err, ok := res.(error); ok {
-			MaybeFail(c, err)
+func (s ZSetSuite) TestZset(c *C) {
+	for _, t := range zsetTests {
+		cmd := commands[t.command]
+		var wb *levigo.WriteBatch
+		if cmd.writes {
+			wb = levigo.NewWriteBatch()
 		}
-		err := DB.Write(DefaultWriteOptions, wb)
-		MaybeFail(c, err)
-
-		c.Assert(res.(int), Equals, t.newKeys)
-
-		wb.Close()
-	}
-}
-
-var zscoreTests = []struct {
-	key    string
-	member string
-	score  string
-}{
-	{"foo", "bar", "2"},
-	{"foo", "baz", "1"},
-	{"asdf", "bar", "0.1"},
-	{"fooz", "bar", "4e+29"},
-}
-
-func (s ZSetSuite) TestZscore(c *C) {
-	for _, t := range zscoreTests {
-		res := zscore([][]byte{[]byte(t.key), []byte(t.member)}, nil)
-		if err, ok := res.(error); ok {
+		res := cmd.function(bytes.Split([]byte(t.args), []byte(" ")), wb)
+		if cmd.writes {
+			err := DB.Write(DefaultWriteOptions, wb)
 			MaybeFail(c, err)
+			wb.Close()
 		}
 
-		c.Assert(string(res.([]byte)), Equals, t.score)
+		c.Assert(res, DeepEquals, t.response, Commentf("%s %s, obtained=%s expected=%s", t.command, t.args, res, t.response))
 	}
 }

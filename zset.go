@@ -18,23 +18,32 @@ import (
  * ZScoreKey | key length uint32 | key | score float64 | member = empty
  */
 
-func zadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	if (len(args)-1)%2 != 0 {
 		return fmt.Errorf("wrong number of arguments for 'zadd' command")
 	}
+	return zadd(args, wb, false)
+}
 
+func Zincrby(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return zadd(args, wb, true)
+}
+
+func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 	var newMembers int
+	var score float64
 	scoreBytes := make([]byte, 8)
 
 	// Iterate through each of the score/member pairs
 	for i := 1; i < len(args); i += 2 {
-		score, err := strconv.ParseFloat(string(args[i]), 64)
+		var err error
+		score, err = strconv.ParseFloat(string(args[i]), 64)
 		if err != nil {
 			return fmt.Errorf("'%s' is not a valid float", string(args[1]))
 		}
 
 		// Check if the member exists
-		setKey, scoreKey := zsetKey(args[0], args[i+1]), zscoreKey(args[0], args[i+1], score)
+		setKey := zsetKey(args[0], args[i+1])
 		res, err := DB.Get(DefaultReadOptions, setKey)
 		if err != nil {
 			return err
@@ -45,12 +54,15 @@ func zadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 				return InvalidDataError
 			}
 			actualScore := math.Float64frombits(binary.BigEndian.Uint64(res))
+			if incr { // this is a ZINCRBY, so increment the score
+				score += actualScore
+			}
 			if score == actualScore { // Member already exists with the same score, do nothing
 				continue
 			}
 
 			// Delete score key for member
-			wb.Delete(scoreKey)
+			wb.Delete(zscoreKey(args[0], args[i+1], actualScore))
 		} else { // No score found, we're adding a new member
 			newMembers++
 		}
@@ -58,7 +70,7 @@ func zadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 		// Store the set and score keys
 		binary.BigEndian.PutUint64(scoreBytes, math.Float64bits(score))
 		wb.Put(setKey, scoreBytes)
-		wb.Put(scoreKey, []byte{}) // The score key is only used for sorting, the value is empty
+		wb.Put(zscoreKey(args[0], args[i+1], score), []byte{}) // The score key is only used for sorting, the value is empty
 	}
 
 	// Update the set metadata with the new cardinality
@@ -88,10 +100,13 @@ func zadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 		wb.Put(metaKey, res)
 	}
 
+	if incr { // This is a ZINCRBY, return the new score
+		return ftoa(score)
+	}
 	return newMembers
 }
 
-func zscore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zscore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	setKey := zsetKey(args[0], args[1])
 	res, err := DB.Get(DefaultReadOptions, setKey)
 	if err != nil {

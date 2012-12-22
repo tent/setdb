@@ -25,19 +25,20 @@ type cmdDesc struct {
 }
 
 var commandList = []cmdDesc{
-	{"ping", ping, 0, false},
-	{"echo", echo, 1, false},
-	{"zadd", zadd, -3, true},
-	{"zscore", zscore, 2, false},
+	{"ping", Ping, 0, false},
+	{"echo", Echo, 1, false},
+	{"zadd", Zadd, -3, true},
+	{"zscore", Zscore, 2, false},
+	{"zincrby", Zincrby, 3, true},
 }
 
 var commands = make(map[string]cmdDesc, len(commandList))
 
-func ping(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Ping(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return "PONG"
 }
 
-func echo(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Echo(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return args[0]
 }
 
