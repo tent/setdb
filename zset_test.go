@@ -1,9 +1,11 @@
 package main
 
 import (
-	"testing"
+	"bytes"
 	"os"
+	"testing"
 
+	"github.com/jmhodges/levigo"
 	. "launchpad.net/gocheck"
 )
 
@@ -30,40 +32,53 @@ func MaybeFail(c *C, err error) {
 }
 
 var zaddTests = []struct {
-	key    string
-	member string
-	score  float64
-	newKey bool
+	args    string
+	newKeys int
 }{
-	{"foo", "bar", 1, true},
-	{"foo", "bar", 1, false},
-	{"foo", "bar", 2, false},
-	{"foo", "baz", 1, true},
-	{"asdf", "bar", 0.1, true},
+	{"foo 1 bar", 1},
+	{"foo 1 bar", 0},
+	{"foo 2 bar", 0},
+	{"foo 1 baz", 1},
+	{"foo 1 baz 2 bar", 0},
+	{"foo 5.1 asdf 2 buzz 1 baz 2 bar", 2},
+	{"asdf 0.1 bar", 1},
+	{"fooz 4e29 bar 0.2 baz", 2},
 }
 
 func (s ZSetSuite) TestZadd(c *C) {
 	for _, t := range zaddTests {
-		res, err := zadd([]byte(t.key), t.score, []byte(t.member))
+		wb := levigo.NewWriteBatch()
+		res := zadd(bytes.Split([]byte(t.args), []byte(" ")), wb)
+		if err, ok := res.(error); ok {
+			MaybeFail(c, err)
+		}
+		err := DB.Write(DefaultWriteOptions, wb)
 		MaybeFail(c, err)
-		c.Assert(res, Equals, t.newKey)
+
+		c.Assert(res.(int), Equals, t.newKeys)
+
+		wb.Close()
 	}
 }
 
 var zscoreTests = []struct {
 	key    string
 	member string
-	score  float64
+	score  string
 }{
-	{"foo", "bar", 2},
-	{"foo", "baz", 1},
-	{"asdf", "bar", 0.1},
+	{"foo", "bar", "2"},
+	{"foo", "baz", "1"},
+	{"asdf", "bar", "0.1"},
+	{"fooz", "bar", "4e+29"},
 }
 
 func (s ZSetSuite) TestZscore(c *C) {
 	for _, t := range zscoreTests {
-		res, err := zscore([]byte(t.key), []byte(t.member))
-		MaybeFail(c, err)
-		c.Assert(*res, Equals, t.score)
+		res := zscore([][]byte{[]byte(t.key), []byte(t.member)}, nil)
+		if err, ok := res.(error); ok {
+			MaybeFail(c, err)
+		}
+
+		c.Assert(string(res.([]byte)), Equals, t.score)
 	}
 }

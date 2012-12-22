@@ -3,11 +3,16 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/jmhodges/levigo"
 )
+
+var InvalidKeyTypeError = fmt.Errorf("Operation against a key holding the wrong kind of value")
 
 func listen() {
 	l, err := net.Listen("tcp", ":12345")
@@ -75,7 +80,21 @@ func handleClient(client net.Conn) {
 		}
 
 		// call the command and respond
-		res := command.function(args[1:])
+		var wb *levigo.WriteBatch
+		if command.writes {
+			wb = levigo.NewWriteBatch()
+			defer wb.Close()
+		}
+		res := command.function(args[1:], wb)
+		if command.writes {
+			if _, ok := res.(error); !ok { // only write the batch if the return value is not an error
+				err = DB.Write(DefaultWriteOptions, wb)
+			}
+			if err != nil {
+				writeError(client, "data write error: "+err.Error())
+				return
+			}
+		}
 		err = writeReply(client, res)
 		if err != nil {
 			return
@@ -151,7 +170,9 @@ func writeReply(w io.Writer, reply cmdReply) (err error) {
 	case []byte:
 		err = writeBulk(w, reply.([]byte))
 	case int:
-		err = writeInt(w, reply.(int))
+		err = writeInt(w, int64(reply.(int)))
+	case int64:
+		err = writeInt(w, reply.(int64))
 	case error:
 		err = writeError(w, reply.(error).Error())
 	case []cmdReply:
@@ -167,8 +188,8 @@ func writeNil(w io.Writer) error {
 	return err
 }
 
-func writeInt(w io.Writer, n int) error {
-	_, err := w.Write([]byte(":" + strconv.Itoa(n) + "\r\n"))
+func writeInt(w io.Writer, n int64) error {
+	_, err := w.Write([]byte(":" + strconv.FormatInt(n, 10) + "\r\n"))
 	return err
 }
 

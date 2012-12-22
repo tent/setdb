@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/jmhodges/levigo"
 )
@@ -15,36 +17,63 @@ import (
  * ZSetKey   | key length uint32 | key | member = score float64
  * ZScoreKey | key length uint32 | key | score float64 | member = empty
  */
-func zadd(key []byte, score float64, member []byte) (newMember bool, err error) {
-	// Check if the key exists
-	setKey, scoreKey := zsetKey(key, member), zscoreKey(key, member, score)
-	res, err := DB.Get(DefaultReadOptions, setKey)
-	if err != nil {
-		return
+
+func zadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	if (len(args)-1)%2 != 0 {
+		return fmt.Errorf("wrong number of arguments for 'zadd' command")
 	}
 
-	wb := levigo.NewWriteBatch()
-	defer wb.Close()
+	var newMembers int
+	scoreBytes := make([]byte, 8)
 
-	if res != nil { // We have a score, so the member already exists
-		if len(res) != 8 {
-			return false, InvalidDataError
-		}
-		actualScore := math.Float64frombits(binary.BigEndian.Uint64(res))
-		if score == actualScore { // Member already exists with the same score, do nothing
-			return
+	// Iterate through each of the score/member pairs
+	for i := 1; i < len(args); i += 2 {
+		score, err := strconv.ParseFloat(string(args[i]), 64)
+		if err != nil {
+			return fmt.Errorf("'%s' is not a valid float", string(args[1]))
 		}
 
-		// Delete score key for member
-		wb.Delete(scoreKey)
-	} else { // No score found, we're adding a new member
-		newMember = true
+		// Check if the member exists
+		setKey, scoreKey := zsetKey(args[0], args[i+1]), zscoreKey(args[0], args[i+1], score)
+		res, err := DB.Get(DefaultReadOptions, setKey)
+		if err != nil {
+			return err
+		}
+
+		if res != nil { // We got a score from the db, so the member already exists
+			if len(res) != 8 {
+				return InvalidDataError
+			}
+			actualScore := math.Float64frombits(binary.BigEndian.Uint64(res))
+			if score == actualScore { // Member already exists with the same score, do nothing
+				continue
+			}
+
+			// Delete score key for member
+			wb.Delete(scoreKey)
+		} else { // No score found, we're adding a new member
+			newMembers++
+		}
+
+		// Store the set and score keys
+		binary.BigEndian.PutUint64(scoreBytes, math.Float64bits(score))
+		wb.Put(setKey, scoreBytes)
+		wb.Put(scoreKey, []byte{}) // The score key is only used for sorting, the value is empty
+	}
+
+	// Update the set metadata with the new cardinality
+	if newMembers > 0 {
 		var card uint32
-
-		metaKey := zmetaKey(key)
-		res, err = DB.Get(DefaultReadOptions, metaKey)
-		if res != nil && (len(res) < 5 || res[0] != ZCardValue) {
-			return false, InvalidDataError
+		metaKey := zmetaKey(args[0])
+		res, err := DB.Get(DefaultReadOptions, metaKey)
+		if err != nil {
+			return err
+		}
+		if res != nil && res[0] != ZCardValue {
+			return InvalidKeyTypeError
+		}
+		if res != nil && len(res) < 5 {
+			return InvalidDataError
 		}
 		if res != nil { // This zset exists, get the current cardinality
 			card = binary.BigEndian.Uint32(res[1:])
@@ -55,32 +84,27 @@ func zadd(key []byte, score float64, member []byte) (newMember bool, err error) 
 		}
 
 		// Increment the cardinality
-		binary.BigEndian.PutUint32(res[1:], card+1)
+		binary.BigEndian.PutUint32(res[1:], card+uint32(newMembers))
 		wb.Put(metaKey, res)
 	}
 
-	scoreBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(scoreBytes, math.Float64bits(score))
-	wb.Put(setKey, scoreBytes)
-	wb.Put(scoreKey, []byte{})
-
-	err = DB.Write(DefaultWriteOptions, wb)
-
-	return
+	return newMembers
 }
 
-func zscore(key, member []byte) (*float64, error) {
-	setKey := zsetKey(key, member)
+func zscore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	setKey := zsetKey(args[0], args[1])
 	res, err := DB.Get(DefaultReadOptions, setKey)
-	if err != nil || res == nil {
-		return nil, err
+	if err != nil {
+		return err
+	}
+	if res == nil {
+		return nil
 	}
 	if len(res) != 8 {
-		return nil, InvalidDataError
+		return InvalidDataError
 	}
 
-	score := math.Float64frombits(binary.BigEndian.Uint64(res))
-	return &score, nil
+	return ftoa(btof(res))
 }
 
 func zmetaKey(k []byte) []byte {
@@ -109,6 +133,25 @@ func zscoreKey(k, member []byte, score float64) []byte {
 	writeByteSortableFloat(key[5+len(k):], score)
 	copy(key[13+len(k):], member)
 	return key
+}
+
+func btof(b []byte) float64 {
+	return math.Float64frombits(binary.BigEndian.Uint64(b))
+}
+
+func ftoa(f float64) []byte {
+	b := []byte(strconv.FormatFloat(f, 'g', -1, 64))
+	if len(b) > 1 && b[1] == 'I' { // -Inf/+Inf to lowercase
+		b[1] = 'i'
+	}
+	if b[0] == 'N' { // NaN to lowercase
+		b[0], b[2] = 'n', 'n'
+	}
+	if b[0] == '+' { // +inf to inf
+		b = b[1:]
+	}
+
+	return b
 }
 
 /* Natural sorting of floating point numbers

@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/jmhodges/levigo"
+)
+
 // A cmdReply is a response to a command, and wraps one of these types:
 //
 // string - single line reply, automatically prefixed with "+"
@@ -11,26 +15,29 @@ package main
 // []cmdReply - multi-bulk reply, automatically serialized, members can be nil, []byte, or int
 type cmdReply interface{}
 
-type cmdFunc func(args [][]byte) cmdReply
+type cmdFunc func(args [][]byte, wb *levigo.WriteBatch) cmdReply
 
 type cmdDesc struct {
 	name     string
 	function cmdFunc
-	arity    int // the number of required arguments, -n means >= n
+	arity    int  // the number of required arguments, -n means >= n
+	writes   bool // false if the command doesn't write data (the WriteBatch will not be passed in)
 }
 
 var commandList = []cmdDesc{
-	{"ping", pingCommand, 0},
-	{"echo", echoCommand, 1},
+	{"ping", ping, 0, false},
+	{"echo", echo, 1, false},
+	{"zadd", zadd, -3, true},
+	{"zscore", zscore, 2, false},
 }
 
 var commands = make(map[string]cmdDesc, len(commandList))
 
-func pingCommand(args [][]byte) cmdReply {
+func ping(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return "PONG"
 }
 
-func echoCommand(args [][]byte) cmdReply {
+func echo(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return args[0]
 }
 
