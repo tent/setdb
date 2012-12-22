@@ -30,6 +30,7 @@ var commandList = []cmdDesc{
 	{"zadd", Zadd, -3, true},
 	{"zcard", Zcard, 1, false},
 	{"zincrby", Zincrby, 3, true},
+	{"zrange", Zrange, -3, false},
 	{"zrem", Zrem, -2, true},
 	{"zscore", Zscore, 2, false},
 }

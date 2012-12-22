@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/jmhodges/levigo"
 )
@@ -176,6 +177,74 @@ func Zrem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return deleted
 }
 
+func Zrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	count, err := zcard(args[0])
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return []cmdReply{}
+	}
+
+	start, err := strconv.ParseInt(string(args[1]), 10, 64)
+	end, err2 := strconv.ParseInt(string(args[2]), 10, 64)
+	if err != nil || err2 != nil {
+		return fmt.Errorf("value is not an integer or out of range")
+	}
+
+	// if the index is negative, it is counting from the end, 
+	// so add it to the length to get the absolute index
+	if start < 0 {
+		start += int64(count)
+	}
+	if end < 0 {
+		end += int64(count)
+	}
+
+	if end > int64(count) { // limit the end to the last member
+		end = int64(count) - 1
+	}
+	// the start comes after the end, so we're not going to find anything
+	if start > end {
+		return []cmdReply{}
+	}
+
+	var withscores bool
+	items := end + 1 - start
+	if len(args) >= 4 {
+		if strings.ToLower(string(args[3])) != "withscores" || len(args) > 4 {
+			return fmt.Errorf("syntax error")
+		}
+		withscores = true
+		items *= 2
+	}
+	res := make([]cmdReply, 0, items)
+
+	it := DB.NewIterator(DefaultReadOptions)
+	defer it.Close()
+	var i int64
+	for it.Seek(zscoreIterKey(args[0], false)); it.Valid(); it.Next() {
+		if i < start {
+			i++
+			continue
+		}
+
+		score, member := parseZscoreKey(it.Key(), len(args[0]))
+		if withscores {
+			res = append(res, member, ftoa(score))
+		} else {
+			res = append(res, member)
+		}
+
+		i++
+		if i > end {
+			break
+		}
+	}
+
+	return res
+}
+
 func zmetaKey(k []byte) []byte {
 	key := make([]byte, 1+len(k))
 	key[0] = MetaKey
@@ -193,6 +262,14 @@ func zsetKey(k, member []byte) []byte {
 	return key
 }
 
+func zscoreIterKey(k []byte, reverse bool) []byte {
+	key := make([]byte, 5+len(k))
+	key[0] = ZScoreKey
+	binary.BigEndian.PutUint32(key[1:], uint32(len(k)))
+	copy(key[5:], k)
+	return key
+}
+
 // ZScoreKey | key length uint32 | key | score float64 | member
 func zscoreKey(k, member []byte, score float64) []byte {
 	key := make([]byte, 13+len(k)+len(member))
@@ -202,6 +279,10 @@ func zscoreKey(k, member []byte, score float64) []byte {
 	writeByteSortableFloat(key[5+len(k):], score)
 	copy(key[13+len(k):], member)
 	return key
+}
+
+func parseZscoreKey(b []byte, keyLen int) (float64, []byte) {
+	return readByteSortableFloat(b[keyLen+5:]), b[keyLen+13:]
 }
 
 func btof(b []byte) float64 {
@@ -260,7 +341,6 @@ func readByteSortableFloat(b []byte) float64 {
 // ZUNIONSTORE
 // ZREVRANGE
 // ZREVRANGEBYSCORE
-// ZRANGE
 // ZRANGEBYSCORE
 // ZRANK
 // ZREMRANGEBYRANK
