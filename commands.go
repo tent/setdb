@@ -28,8 +28,9 @@ var commandList = []cmdDesc{
 	{"ping", Ping, 0, false},
 	{"echo", Echo, 1, false},
 	{"zadd", Zadd, -3, true},
-	{"zscore", Zscore, 2, false},
+	{"zcard", Zcard, 1, false},
 	{"zincrby", Zincrby, 3, true},
+	{"zscore", Zscore, 2, false},
 }
 
 var commands = make(map[string]cmdDesc, len(commandList))

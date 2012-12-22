@@ -48,8 +48,13 @@ var zsetTests = []struct {
 	{"zscore", "foo baz", []byte("1")},
 	{"zscore", "asdf bar", []byte("0.1")},
 	{"zscore", "fooz bar", []byte("4e+29")},
+	{"zscore", "fooz bag", nil},
 	{"zincrby", "foo 0.1 bar", []byte("2.1")},
 	{"zincrby", "foo 1.1 bazz", []byte("1.1")},
+	{"zcard", "foo", uint32(5)},
+	{"zcard", "fooz", uint32(2)},
+	{"zcard", "asdf", uint32(1)},
+	{"zcard", "asdfa", 0},
 }
 
 func (s ZSetSuite) TestZset(c *C) {

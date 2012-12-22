@@ -81,7 +81,7 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 		if err != nil {
 			return err
 		}
-		if res != nil && res[0] != ZCardValue {
+		if res != nil && len(res) > 0 && res[0] != ZCardValue {
 			return InvalidKeyTypeError
 		}
 		if res != nil && len(res) < 5 {
@@ -107,8 +107,7 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 }
 
 func Zscore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	setKey := zsetKey(args[0], args[1])
-	res, err := DB.Get(DefaultReadOptions, setKey)
+	res, err := DB.Get(DefaultReadOptions, zsetKey(args[0], args[1]))
 	if err != nil {
 		return err
 	}
@@ -120,6 +119,23 @@ func Zscore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	}
 
 	return ftoa(btof(res))
+}
+
+func Zcard(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	res, err := DB.Get(DefaultReadOptions, zmetaKey(args[0]))
+	if err != nil {
+		return err
+	}
+	if res == nil {
+		return 0
+	}
+	if len(res) > 0 && res[0] != ZCardValue {
+		return InvalidKeyTypeError
+	}
+	if len(res) < 5 {
+		return InvalidDataError
+	}
+	return binary.BigEndian.Uint32(res[1:])
 }
 
 func zmetaKey(k []byte) []byte {

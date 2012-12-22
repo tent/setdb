@@ -173,6 +173,8 @@ func writeReply(w io.Writer, reply cmdReply) (err error) {
 		err = writeInt(w, int64(reply.(int)))
 	case int64:
 		err = writeInt(w, reply.(int64))
+	case uint32:
+		err = writeInt(w, int64(reply.(uint32)))
 	case error:
 		err = writeError(w, reply.(error).Error())
 	case []cmdReply:
