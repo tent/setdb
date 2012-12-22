@@ -30,7 +30,7 @@ func Zincrby(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 }
 
 func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
-	var newMembers int
+	var newMembers uint32
 	var score float64
 	scoreBytes := make([]byte, 8)
 
@@ -75,29 +75,16 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 
 	// Update the set metadata with the new cardinality
 	if newMembers > 0 {
-		var card uint32
-		metaKey := zmetaKey(args[0])
-		res, err := DB.Get(DefaultReadOptions, metaKey)
+		card, err := zcard(args[0])
 		if err != nil {
 			return err
 		}
-		if res != nil && len(res) > 0 && res[0] != ZCardValue {
-			return InvalidKeyTypeError
-		}
-		if res != nil && len(res) < 5 {
-			return InvalidDataError
-		}
-		if res != nil { // This zset exists, get the current cardinality
-			card = binary.BigEndian.Uint32(res[1:])
-		}
-		if res == nil {
-			res = make([]byte, 5)
-			res[0] = ZCardValue
-		}
+		res := make([]byte, 5)
+		res[0] = ZCardValue
 
 		// Increment the cardinality
-		binary.BigEndian.PutUint32(res[1:], card+uint32(newMembers))
-		wb.Put(metaKey, res)
+		binary.BigEndian.PutUint32(res[1:], card+newMembers)
+		wb.Put(zmetaKey(args[0]), res)
 	}
 
 	if incr { // This is a ZINCRBY, return the new score
@@ -122,20 +109,71 @@ func Zscore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 }
 
 func Zcard(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	res, err := DB.Get(DefaultReadOptions, zmetaKey(args[0]))
+	c, err := zcard(args[0])
 	if err != nil {
 		return err
 	}
+	return c
+}
+
+func zcard(key []byte) (uint32, error) {
+	res, err := DB.Get(DefaultReadOptions, zmetaKey(key))
+	if err != nil {
+		return 0, err
+	}
 	if res == nil {
-		return 0
+		return 0, nil
 	}
 	if len(res) > 0 && res[0] != ZCardValue {
-		return InvalidKeyTypeError
+		return 0, InvalidKeyTypeError
 	}
 	if len(res) < 5 {
-		return InvalidDataError
+		return 0, InvalidDataError
 	}
-	return binary.BigEndian.Uint32(res[1:])
+	return binary.BigEndian.Uint32(res[1:]), nil
+}
+
+func Zrem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	card, err := zcard(args[0])
+	if err != nil {
+		return err
+	}
+	if card == 0 {
+		return 0
+	}
+
+	var deleted uint32
+	// Delete each of the members
+	for _, member := range args[1:] {
+		setKey := zsetKey(args[0], member)
+		res, err := DB.Get(DefaultReadOptions, setKey)
+		if err != nil {
+			return nil
+		}
+		if res == nil {
+			continue
+		}
+		if len(res) != 8 {
+			return InvalidDataError
+		}
+
+		score := btof(res)
+		wb.Delete(setKey)
+		wb.Delete(zscoreKey(args[0], member, score))
+		deleted++
+	}
+	if deleted == card { // We deleted all of the members, so delete the meta key
+		wb.Delete(zmetaKey(args[0]))
+	} else if deleted > 0 { // Decrement the cardinality
+		data := make([]byte, 5)
+		data[0] = ZCardValue
+
+		// Increment the cardinality
+		binary.BigEndian.PutUint32(data[1:], card-deleted)
+		wb.Put(zmetaKey(args[0]), data)
+	}
+
+	return deleted
 }
 
 func zmetaKey(k []byte) []byte {
@@ -217,9 +255,6 @@ func readByteSortableFloat(b []byte) float64 {
 	return -math.Float64frombits(binary.BigEndian.Uint64(b))
 }
 
-// ZADD
-// ZREM
-// ZCARD
 // ZCOUNT
 // ZINTERSTORE
 // ZUNIONSTORE
@@ -227,10 +262,7 @@ func readByteSortableFloat(b []byte) float64 {
 // ZREVRANGEBYSCORE
 // ZRANGE
 // ZRANGEBYSCORE
-
-// ZINCRBY
 // ZRANK
 // ZREMRANGEBYRANK
 // ZREMRANGEBYSCORE
 // ZREVRANK
-// ZSCORE

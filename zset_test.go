@@ -36,14 +36,14 @@ var zsetTests = []struct {
 	args     string
 	response interface{}
 }{
-	{"zadd", "foo 1 bar", 1},
-	{"zadd", "foo 1 bar", 0},
-	{"zadd", "foo 2 bar", 0},
-	{"zadd", "foo 1 baz", 1},
-	{"zadd", "foo 1 baz 2 bar", 0},
-	{"zadd", "foo 5.1 asdf 2 buzz 1 baz 2 bar", 2},
-	{"zadd", "asdf 0.1 bar", 1},
-	{"zadd", "fooz 4e29 bar 0.2 baz", 2},
+	{"zadd", "foo 1 bar", uint32(1)},
+	{"zadd", "foo 1 bar", uint32(0)},
+	{"zadd", "foo 2 bar", uint32(0)},
+	{"zadd", "foo 1 baz", uint32(1)},
+	{"zadd", "foo 1 baz 2 bar", uint32(0)},
+	{"zadd", "foo 5.1 asdf 2 buzz 1 baz 2 bar", uint32(2)},
+	{"zadd", "asdf 0.1 bar", uint32(1)},
+	{"zadd", "fooz 4e29 bar 0.2 baz", uint32(2)},
 	{"zscore", "foo bar", []byte("2")},
 	{"zscore", "foo baz", []byte("1")},
 	{"zscore", "asdf bar", []byte("0.1")},
@@ -54,7 +54,13 @@ var zsetTests = []struct {
 	{"zcard", "foo", uint32(5)},
 	{"zcard", "fooz", uint32(2)},
 	{"zcard", "asdf", uint32(1)},
-	{"zcard", "asdfa", 0},
+	{"zcard", "asdfa", uint32(0)},
+	{"zrem", "foo bar baz", uint32(2)},
+	{"zrem", "foo bar", uint32(0)},
+	{"zrem", "asdfa bar", 0},
+	{"zcard", "foo", uint32(3)},
+	{"zrem", "asdf bar", uint32(1)},
+	{"zcard", "asdf", uint32(0)},
 }
 
 func (s ZSetSuite) TestZset(c *C) {
