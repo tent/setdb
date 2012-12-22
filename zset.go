@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -85,7 +86,7 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 
 		// Increment the cardinality
 		binary.BigEndian.PutUint32(res[1:], card+newMembers)
-		wb.Put(zmetaKey(args[0]), res)
+		wb.Put(metaKey(args[0]), res)
 	}
 
 	if incr { // This is a ZINCRBY, return the new score
@@ -118,7 +119,7 @@ func Zcard(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 }
 
 func zcard(key []byte) (uint32, error) {
-	res, err := DB.Get(DefaultReadOptions, zmetaKey(key))
+	res, err := DB.Get(DefaultReadOptions, metaKey(key))
 	if err != nil {
 		return 0, err
 	}
@@ -164,14 +165,14 @@ func Zrem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 		deleted++
 	}
 	if deleted == card { // We deleted all of the members, so delete the meta key
-		wb.Delete(zmetaKey(args[0]))
+		wb.Delete(metaKey(args[0]))
 	} else if deleted > 0 { // Decrement the cardinality
 		data := make([]byte, 5)
 		data[0] = ZCardValue
 
 		// Increment the cardinality
 		binary.BigEndian.PutUint32(data[1:], card-deleted)
-		wb.Put(zmetaKey(args[0]), data)
+		wb.Put(metaKey(args[0]), data)
 	}
 
 	return deleted
@@ -245,11 +246,22 @@ func Zrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return res
 }
 
-func zmetaKey(k []byte) []byte {
-	key := make([]byte, 1+len(k))
-	key[0] = MetaKey
-	copy(key[1:], k)
-	return key
+func DelZset(key []byte, wb *levigo.WriteBatch) {
+	// TODO: count keys to verify everything works as expected?
+	it := DB.NewIterator(DefaultReadOptions)
+	defer it.Close()
+	iterKey := zsetIterKey(key, false)
+	for it.Seek(iterKey); it.Valid(); it.Next() {
+		k, v := it.Key(), it.Value()
+		// If the prefix of the current key doesn't match the iteration key,
+		// we have reached the end of the zset
+		if !bytes.Equal(iterKey, k[:len(iterKey)]) {
+			break
+		}
+		wb.Delete(k)
+		wb.Delete(zscoreKey(key, k[len(iterKey):], btof(v)))
+	}
+	wb.Delete(metaKey(key))
 }
 
 // ZSetKey | key length uint32 | key | member
@@ -262,9 +274,10 @@ func zsetKey(k, member []byte) []byte {
 	return key
 }
 
-func zscoreIterKey(k []byte, reverse bool) []byte {
+// zsetKey without the member
+func zsetIterKey(k []byte, reverse bool) []byte {
 	key := make([]byte, 5+len(k))
-	key[0] = ZScoreKey
+	key[0] = ZSetKey
 	binary.BigEndian.PutUint32(key[1:], uint32(len(k)))
 	copy(key[5:], k)
 	return key
@@ -278,6 +291,15 @@ func zscoreKey(k, member []byte, score float64) []byte {
 	copy(key[5:], k)
 	writeByteSortableFloat(key[5+len(k):], score)
 	copy(key[13+len(k):], member)
+	return key
+}
+
+// zscoreKey without the score or member
+func zscoreIterKey(k []byte, reverse bool) []byte {
+	key := make([]byte, 5+len(k))
+	key[0] = ZScoreKey
+	binary.BigEndian.PutUint32(key[1:], uint32(len(k)))
+	copy(key[5:], k)
 	return key
 }
 

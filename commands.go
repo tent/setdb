@@ -25,8 +25,9 @@ type cmdDesc struct {
 }
 
 var commandList = []cmdDesc{
-	{"ping", Ping, 0, false},
+	{"del", Del, -1, true},
 	{"echo", Echo, 1, false},
+	{"ping", Ping, 0, false},
 	{"zadd", Zadd, -3, true},
 	{"zcard", Zcard, 1, false},
 	{"zincrby", Zincrby, 3, true},
@@ -43,6 +44,37 @@ func Ping(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 
 func Echo(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return args[0]
+}
+
+func Del(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	deleted := 0
+	for _, key := range args {
+		res, err := DB.Get(DefaultReadOptions, metaKey(key))
+		if err != nil {
+			return err
+		}
+		if res == nil {
+			continue
+		}
+		if len(res) == 0 {
+			return InvalidDataError
+		}
+		switch res[0] {
+		case ZCardValue:
+			DelZset(key, wb)
+		default:
+			panic("unknown key type")
+		}
+		deleted++
+	}
+	return deleted
+}
+
+func metaKey(k []byte) []byte {
+	key := make([]byte, 1+len(k))
+	key[0] = MetaKey
+	copy(key[1:], k)
+	return key
 }
 
 func init() {
