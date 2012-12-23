@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 
 	"github.com/jmhodges/levigo"
 )
@@ -221,7 +220,7 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 	var withscores bool
 	items := end + 1 - start
 	if len(args) >= 4 {
-		if strings.ToLower(string(args[3])) != "withscores" || len(args) > 4 {
+		if len(args[3]) != 10 || len(args) > 4 { // withscores flag
 			return SyntaxError
 		}
 		withscores = true
