@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -11,8 +10,6 @@ import (
 
 	"github.com/jmhodges/levigo"
 )
-
-var InvalidKeyTypeError = fmt.Errorf("Operation against a key holding the wrong kind of value")
 
 func listen() {
 	l, err := net.Listen("tcp", ":12345")

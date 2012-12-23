@@ -10,7 +10,6 @@ import (
 var DB *levigo.DB
 var DefaultReadOptions = levigo.NewReadOptions()
 var DefaultWriteOptions = levigo.NewWriteOptions()
-var InvalidDataError = fmt.Errorf("Invalid data")
 
 // Key/Value type identifiers, only append to this list
 const (

@@ -1,8 +1,14 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/jmhodges/levigo"
 )
+
+var InvalidKeyTypeError = fmt.Errorf("Operation against a key holding the wrong kind of value")
+var InvalidDataError = fmt.Errorf("Invalid data")
+var SyntaxError = fmt.Errorf("syntax error")
 
 // A cmdReply is a response to a command, and wraps one of these types:
 //
@@ -33,6 +39,7 @@ var commandList = []cmdDesc{
 	{"zincrby", Zincrby, 3, true},
 	{"zrange", Zrange, -3, false},
 	{"zrem", Zrem, -2, true},
+	{"zrevrange", Zrevrange, -3, false},
 	{"zscore", Zscore, 2, false},
 }
 

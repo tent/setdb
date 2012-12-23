@@ -179,6 +179,14 @@ func Zrem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 }
 
 func Zrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return zrange(args, false)
+}
+
+func Zrevrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return zrange(args, true)
+}
+
+func zrange(args [][]byte, reverse bool) cmdReply {
 	count, err := zcard(args[0])
 	if err != nil {
 		return err
@@ -214,7 +222,7 @@ func Zrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	items := end + 1 - start
 	if len(args) >= 4 {
 		if strings.ToLower(string(args[3])) != "withscores" || len(args) > 4 {
-			return fmt.Errorf("syntax error")
+			return SyntaxError
 		}
 		withscores = true
 		items *= 2
@@ -223,23 +231,25 @@ func Zrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 
 	it := DB.NewIterator(DefaultReadOptions)
 	defer it.Close()
+
 	var i int64
-	for it.Seek(zscoreIterKey(args[0], false)); it.Valid(); it.Next() {
-		if i < start {
-			i++
-			continue
+	iterKey := zscoreIterKey(args[0])
+	if reverse {
+		iterKey = lastIterKey(iterKey)
+	}
+	for it.Seek(iterKey); it.Valid() && i <= end; i++ {
+		if reverse {
+			it.Prev()
 		}
-
-		score, member := parseZscoreKey(it.Key(), len(args[0]))
-		if withscores {
-			res = append(res, member, ftoa(score))
-		} else {
+		if i >= start {
+			score, member := parseZscoreKey(it.Key(), len(args[0]))
 			res = append(res, member)
+			if withscores {
+				res = append(res, ftoa(score))
+			}
 		}
-
-		i++
-		if i > end {
-			break
+		if !reverse {
+			it.Next()
 		}
 	}
 
@@ -250,7 +260,7 @@ func DelZset(key []byte, wb *levigo.WriteBatch) {
 	// TODO: count keys to verify everything works as expected?
 	it := DB.NewIterator(DefaultReadOptions)
 	defer it.Close()
-	iterKey := zsetIterKey(key, false)
+	iterKey := zsetIterKey(key)
 	for it.Seek(iterKey); it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
 		// If the prefix of the current key doesn't match the iteration key,
@@ -275,7 +285,7 @@ func zsetKey(k, member []byte) []byte {
 }
 
 // zsetKey without the member
-func zsetIterKey(k []byte, reverse bool) []byte {
+func zsetIterKey(k []byte) []byte {
 	key := make([]byte, 5+len(k))
 	key[0] = ZSetKey
 	binary.BigEndian.PutUint32(key[1:], uint32(len(k)))
@@ -295,7 +305,7 @@ func zscoreKey(k, member []byte, score float64) []byte {
 }
 
 // zscoreKey without the score or member
-func zscoreIterKey(k []byte, reverse bool) []byte {
+func zscoreIterKey(k []byte) []byte {
 	key := make([]byte, 5+len(k))
 	key[0] = ZScoreKey
 	binary.BigEndian.PutUint32(key[1:], uint32(len(k)))
@@ -324,6 +334,20 @@ func ftoa(f float64) []byte {
 	}
 
 	return b
+}
+
+// To get a key that will sort *after* the given prefix, we increment the last
+// byte that is not 0xff and return a new byte slice truncated after the byte
+// that was incremented
+func lastIterKey(k []byte) []byte {
+	for i := len(k) - 1; i >= 0; i-- {
+		if k[i] == 0xff {
+			continue
+		}
+		k[i] += 1
+		return k[:i+1]
+	}
+	panic("not reached")
 }
 
 /* Natural sorting of floating point numbers
@@ -361,7 +385,6 @@ func readByteSortableFloat(b []byte) float64 {
 // ZCOUNT
 // ZINTERSTORE
 // ZUNIONSTORE
-// ZREVRANGE
 // ZREVRANGEBYSCORE
 // ZRANGEBYSCORE
 // ZRANK
