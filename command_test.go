@@ -12,15 +12,15 @@ import (
 // Hook gocheck into the gotest runner.
 func Test(t *testing.T) { TestingT(t) }
 
-type ZSetSuite struct{}
+type CommandSuite struct{}
 
-var _ = Suite(&ZSetSuite{})
+var _ = Suite(&CommandSuite{})
 
-func (s ZSetSuite) SetUpSuite(c *C) {
+func (s CommandSuite) SetUpSuite(c *C) {
 	openDB()
 }
 
-func (s ZSetSuite) TearDownSuite(c *C) {
+func (s CommandSuite) TearDownSuite(c *C) {
 	os.RemoveAll("db")
 }
 
@@ -31,11 +31,13 @@ func MaybeFail(c *C, err error) {
 	}
 }
 
-var zsetTests = []struct {
+var tests = []struct {
 	command  string
 	args     string
 	response interface{}
 }{
+	{"ping", "", "PONG"},
+	{"echo", "foo", []byte("foo")},
 	{"zadd", "foo 1 bar", uint32(1)},
 	{"zadd", "foo 1 bar", uint32(0)},
 	{"zadd", "foo 2 bar", uint32(0)},
@@ -82,14 +84,18 @@ var zsetTests = []struct {
 	{"zcard", "asdf", uint32(0)},
 }
 
-func (s ZSetSuite) TestZset(c *C) {
-	for _, t := range zsetTests {
+func (s CommandSuite) TestCommands(c *C) {
+	for _, t := range tests {
 		cmd := commands[t.command]
 		var wb *levigo.WriteBatch
 		if cmd.writes {
 			wb = levigo.NewWriteBatch()
 		}
-		res := cmd.function(bytes.Split([]byte(t.args), []byte(" ")), wb)
+		var args [][]byte
+		if t.args != "" {
+			args = bytes.Split([]byte(t.args), []byte(" "))
+		}
+		res := cmd.function(args, wb)
 		if cmd.writes {
 			err := DB.Write(DefaultWriteOptions, wb)
 			MaybeFail(c, err)
