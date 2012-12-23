@@ -82,6 +82,14 @@ var tests = []struct {
 	{"del", "foo asdf", 0},
 	{"zcard", "foo", uint32(0)},
 	{"zcard", "asdf", uint32(0)},
+	{"set", "foo bar", "OK"},
+	{"get", "foo", []byte("bar")},
+	{"set", "foo baz", "OK"},
+	{"get", "foo", []byte("baz")},
+	{"del", "foo", 1},
+	{"zadd", "asdf 1 bar", uint32(1)},
+	{"set", "asdf foo", "OK"},
+	{"get", "asdf", []byte("foo")},
 }
 
 func (s CommandSuite) TestCommands(c *C) {

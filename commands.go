@@ -4,6 +4,25 @@ import (
 	"fmt"
 
 	"github.com/jmhodges/levigo"
+	"github.com/titanous/setdb/lockring"
+)
+
+var KeyMutex = lockring.NewLockRing(1024)
+
+// Key/Value type identifiers, only append to this list
+const (
+	MetaKey byte = iota
+	StringKey
+	HashKey
+	ListKey
+	SetKey
+	ZSetKey
+	ZScoreKey
+	StringLengthValue
+	HashLengthValue
+	ListLengthValue
+	SetCardValue
+	ZCardValue
 )
 
 var InvalidKeyTypeError = fmt.Errorf("Operation against a key holding the wrong kind of value")
@@ -36,7 +55,9 @@ type cmdDesc struct {
 var commandList = []cmdDesc{
 	{"del", Del, -1, true, 0, -1, 1},
 	{"echo", Echo, 1, false, -1, 0, 0},
+	{"get", Get, 1, false, 0, 0, 0},
 	{"ping", Ping, 0, false, -1, 0, 0},
+	{"set", Set, 2, true, 0, 0, 0},
 	{"zadd", Zadd, -3, true, 0, 0, 0},
 	{"zcard", Zcard, 1, false, 0, 0, 0},
 	{"zincrby", Zincrby, 3, true, 0, 0, 0},
@@ -97,7 +118,8 @@ func Echo(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 func Del(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	deleted := 0
 	for _, key := range args {
-		res, err := DB.Get(DefaultReadOptions, metaKey(key))
+		k := metaKey(key)
+		res, err := DB.Get(DefaultReadOptions, k)
 		if err != nil {
 			return err
 		}
@@ -107,15 +129,22 @@ func Del(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 		if len(res) == 0 {
 			return InvalidDataError
 		}
-		switch res[0] {
-		case ZCardValue:
-			DelZset(key, wb)
-		default:
-			panic("unknown key type")
-		}
+		del(key, res[0], wb)
+		wb.Delete(k)
 		deleted++
 	}
 	return deleted
+}
+
+func del(key []byte, t byte, wb *levigo.WriteBatch) {
+	switch t {
+	case ZCardValue:
+		DelZset(key, wb)
+	case StringLengthValue:
+		DelString(key, wb)
+	default:
+		panic("unknown key type")
+	}
 }
 
 func metaKey(k []byte) []byte {

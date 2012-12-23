@@ -3,34 +3,21 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/jmhodges/levigo"
-	"github.com/titanous/setdb/lockring"
 )
 
 var DB *levigo.DB
 var DefaultReadOptions = levigo.NewReadOptions()
 var DefaultWriteOptions = levigo.NewWriteOptions()
-var KeyMutex = lockring.NewLockRing(1024)
-
-// Key/Value type identifiers, only append to this list
-const (
-	MetaKey byte = iota
-	StringKey
-	HashKey
-	ListKey
-	SetKey
-	ZSetKey
-	ZScoreKey
-	StringLengthValue
-	HashLengthValue
-	ListLengthValue
-	SetCardValue
-	ZCardValue
-)
 
 func openDB() {
 	opts := levigo.NewOptions()
+	cache := levigo.NewLRUCache(128 * 1024 * 1024) // 128MB cache
+	opts.SetCache(cache)
+	filter := levigo.NewBloomFilter(10)
+	opts.SetFilterPolicy(filter)
 	opts.SetCreateIfMissing(true)
 
 	var err error
@@ -46,6 +33,7 @@ func maybeFatal(err error) {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	openDB()
 	listen()
 }

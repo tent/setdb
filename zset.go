@@ -271,7 +271,6 @@ func DelZset(key []byte, wb *levigo.WriteBatch) {
 		wb.Delete(k)
 		wb.Delete(zscoreKey(key, k[len(iterKey):], btof(v)))
 	}
-	wb.Delete(metaKey(key))
 }
 
 // ZSetKey | key length uint32 | key | member
