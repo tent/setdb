@@ -82,6 +82,7 @@ func handleClient(client net.Conn) {
 			wb = levigo.NewWriteBatch()
 			defer wb.Close()
 		}
+		command.lockKeys(args[1:])
 		res := command.function(args[1:], wb)
 		if command.writes {
 			if _, ok := res.(error); !ok { // only write the batch if the return value is not an error
@@ -92,6 +93,7 @@ func handleClient(client net.Conn) {
 				return
 			}
 		}
+		command.unlockKeys(args[1:])
 		err = writeReply(client, res)
 		if err != nil {
 			return

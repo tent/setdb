@@ -5,11 +5,13 @@ import (
 	"os"
 
 	"github.com/jmhodges/levigo"
+	"github.com/titanous/setdb/lockring"
 )
 
 var DB *levigo.DB
 var DefaultReadOptions = levigo.NewReadOptions()
 var DefaultWriteOptions = levigo.NewWriteOptions()
+var KeyMutex = lockring.NewLockRing(1024)
 
 // Key/Value type identifiers, only append to this list
 const (

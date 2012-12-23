@@ -95,13 +95,14 @@ func (s CommandSuite) TestCommands(c *C) {
 		if t.args != "" {
 			args = bytes.Split([]byte(t.args), []byte(" "))
 		}
+		cmd.lockKeys(args)
 		res := cmd.function(args, wb)
 		if cmd.writes {
 			err := DB.Write(DefaultWriteOptions, wb)
 			MaybeFail(c, err)
 			wb.Close()
 		}
-
+		cmd.unlockKeys(args)
 		c.Assert(res, DeepEquals, t.response, Commentf("%s %s, obtained=%s expected=%s", t.command, t.args, res, t.response))
 	}
 }
