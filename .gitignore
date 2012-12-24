@@ -24,3 +24,5 @@ _testmain.go
 # SetDB-specific files
 db/
 setdb
+.vagrant
+Vagrantfile
