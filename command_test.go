@@ -100,6 +100,8 @@ var tests = []struct {
 	{"scard", "aset", uint32(4)},
 	{"sismember", "aset 6", 1},
 	{"sismember", "aset 7", 0},
+	{"smembers", "aset", []cmdReply{[]byte("1"), []byte("2"), []byte("3"), []byte("6")}},
+	{"smembers", "bset", []cmdReply{}},
 	{"del", "aset", 1},
 	{"scard", "aset", uint32(0)},
 }

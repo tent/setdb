@@ -81,6 +81,38 @@ func Sismember(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return 1
 }
 
+func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	// use a snapshot so that the cardinality is consistent with the iterator
+	snapshot := DB.NewSnapshot()
+	defer DB.ReleaseSnapshot(snapshot)
+	opts := levigo.NewReadOptions()
+	opts.SetSnapshot(snapshot)
+	defer opts.Close()
+
+	card, err := scard(args[0], opts)
+	if err != nil {
+		return err
+	}
+	if card == 0 {
+		return []cmdReply{}
+	}
+
+	members := make([]cmdReply, 0, int(card))
+	it := DB.NewIterator(opts)
+	defer it.Close()
+	iterKey := setIterKey(args[0])
+	for it.Seek(iterKey); it.Valid(); it.Next() {
+		// If the prefix of the current key doesn't match the iteration key,
+		// we have reached the end of the set
+		key := it.Key()
+		if !bytes.Equal(iterKey, key[:len(iterKey)]) {
+			break
+		}
+		members = append(members, parseMemberFromSetKey(key))
+	}
+	return members
+}
+
 func DelSet(key []byte, wb *levigo.WriteBatch) {
 	it := DB.NewIterator(DefaultReadOptions)
 	defer it.Close()
@@ -140,11 +172,15 @@ func setIterKey(k []byte) []byte {
 	return key
 }
 
+func parseMemberFromSetKey(key []byte) []byte {
+	keyLen := binary.BigEndian.Uint32(key[1:])
+	return key[5+int(keyLen):]
+}
+
 // SDIFF
 // SDIFFSTORE
 // SINTER
 // SINTERSTORE
-// SMEMBERS
 // SMOVE
 // SPOP
 // SRANDMEMBER
