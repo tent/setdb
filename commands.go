@@ -58,6 +58,10 @@ var commandList = []cmdDesc{
 	{"get", Get, 1, false, 0, 0, 0},
 	{"ping", Ping, 0, false, -1, 0, 0},
 	{"set", Set, 2, true, 0, 0, 0},
+	{"sadd", Sadd, -2, true, 0, 0, 0},
+	{"scard", Scard, 1, false, 0, 0, 0},
+	{"sismember", Sismember, 2, false, 0, 0, 0},
+	{"srem", Srem, -2, true, 0, 0, 0},
 	{"zadd", Zadd, -3, true, 0, 0, 0},
 	{"zcard", Zcard, 1, false, 0, 0, 0},
 	{"zincrby", Zincrby, 3, true, 0, 0, 0},
@@ -136,10 +140,12 @@ func Del(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 
 func del(key []byte, t byte, wb *levigo.WriteBatch) {
 	switch t {
-	case ZCardValue:
-		DelZset(key, wb)
 	case StringLengthValue:
 		DelString(key, wb)
+	case SetCardValue:
+		DelSet(key, wb)
+	case ZCardValue:
+		DelZset(key, wb)
 	default:
 		panic("unknown key type")
 	}
