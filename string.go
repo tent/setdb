@@ -51,3 +51,26 @@ func stringKey(k []byte) []byte {
 	copy(key[5:], k)
 	return key
 }
+
+// APPEND
+// BITCOUNT
+// BITOP
+// DECR
+// DECRBY
+// GET
+// GETBIT
+// GETRANGE
+// GETSET
+// INCR
+// INCRBY
+// INCRBYFLOAT
+// MGET
+// MSET
+// MSETNX
+// PSETEX
+// SET
+// SETBIT
+// SETEX
+// SETNX
+// SETRANGE
+// STRLEN
