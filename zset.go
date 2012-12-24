@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -274,7 +273,7 @@ func DelZset(key []byte, wb *levigo.WriteBatch) {
 		k, v := it.Key(), it.Value()
 		// If the prefix of the current key doesn't match the iteration key,
 		// we have reached the end of the zset
-		if !bytes.Equal(iterKey, k[:len(iterKey)]) {
+		if pastKey(iterKey, k) {
 			break
 		}
 		wb.Delete(k)

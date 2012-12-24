@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 
 	"github.com/jmhodges/levigo"
@@ -105,12 +105,33 @@ func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 		// If the prefix of the current key doesn't match the iteration key,
 		// we have reached the end of the set
 		key := it.Key()
-		if !bytes.Equal(iterKey, key[:len(iterKey)]) {
+		if pastKey(iterKey, key) {
 			break
 		}
 		members = append(members, parseMemberFromSetKey(key))
 	}
 	return members
+}
+
+func Spop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	card, err := scard(args[0], nil)
+	if err != nil {
+		return err
+	}
+	if card == 0 {
+		return nil
+	}
+	member := srand(args[0])
+	if member == nil {
+		return nil
+	}
+	wb.Delete(setKey(args[0], member))
+	if card == 1 { // we're removing the last remaining member
+		wb.Delete(metaKey(args[0]))
+	} else {
+		setCard(args[0], card-1, wb)
+	}
+	return member
 }
 
 func DelSet(key []byte, wb *levigo.WriteBatch) {
@@ -121,7 +142,7 @@ func DelSet(key []byte, wb *levigo.WriteBatch) {
 		key := it.Key()
 		// If the prefix of the current key doesn't match the iteration key,
 		// we have reached the end of the set
-		if !bytes.Equal(iterKey, key[:len(iterKey)]) {
+		if pastKey(iterKey, key) {
 			break
 		}
 		wb.Delete(key)
@@ -148,6 +169,27 @@ func scard(key []byte, opts *levigo.ReadOptions) (uint32, error) {
 	return binary.BigEndian.Uint32(res[1:]), nil
 }
 
+func srand(key []byte) []byte {
+	it := DB.NewIterator(DefaultReadOptions)
+	defer it.Close()
+	iterKey := randSetIterKey(key)
+	it.Seek(iterKey)
+	if !it.Valid() {
+		return nil
+	}
+	k := it.Key()
+	// check if we are in the set
+	// if we aren't it's possible that we ended up at the end, so go back a key
+	if pastKey(iterKey[:len(iterKey)-1], k) {
+		it.Prev()
+		k = it.Key()
+		if pastKey(iterKey[:len(iterKey)-1], k) {
+			return nil
+		}
+	}
+	return parseMemberFromSetKey(k)
+}
+
 func setCard(key []byte, card uint32, wb *levigo.WriteBatch) {
 	data := make([]byte, 5)
 	data[0] = SetCardValue
@@ -172,6 +214,16 @@ func setIterKey(k []byte) []byte {
 	return key
 }
 
+func randSetIterKey(k []byte) []byte {
+	key := make([]byte, 6+len(k))
+	key[0] = SetKey
+	binary.BigEndian.PutUint32(key[1:], uint32(len(k)))
+	copy(key[5:], k)
+	// add a random byte after the key so we end up somewhere random
+	rand.Reader.Read(key[5+len(k):])
+	return key
+}
+
 func parseMemberFromSetKey(key []byte) []byte {
 	keyLen := binary.BigEndian.Uint32(key[1:])
 	return key[5+int(keyLen):]
@@ -182,7 +234,6 @@ func parseMemberFromSetKey(key []byte) []byte {
 // SINTER
 // SINTERSTORE
 // SMOVE
-// SPOP
 // SRANDMEMBER
 // SUNION
 // SUNIONSTORE

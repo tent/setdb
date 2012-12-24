@@ -104,6 +104,9 @@ var tests = []struct {
 	{"smembers", "bset", []cmdReply{}},
 	{"del", "aset", 1},
 	{"scard", "aset", uint32(0)},
+	{"sadd", "bset a", uint32(1)},
+	{"spop", "bset", []byte("a")},
+	{"scard", "bset", uint32(0)},
 }
 
 func (s CommandSuite) TestCommands(c *C) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/jmhodges/levigo"
@@ -62,6 +63,7 @@ var commandList = []cmdDesc{
 	{"scard", Scard, 1, false, 0, 0, 0},
 	{"sismember", Sismember, 2, false, 0, 0, 0},
 	{"smembers", Smembers, 1, false, 0, 0, 0},
+	{"spop", Spop, 1, true, 0, 0, 0},
 	{"srem", Srem, -2, true, 0, 0, 0},
 	{"zadd", Zadd, -3, true, 0, 0, 0},
 	{"zcard", Zcard, 1, false, 0, 0, 0},
@@ -157,6 +159,13 @@ func metaKey(k []byte) []byte {
 	key[0] = MetaKey
 	copy(key[1:], k)
 	return key
+}
+
+func pastKey(iterKey, key []byte) bool {
+	if len(key) <= len(iterKey) || !bytes.Equal(iterKey, key[:len(iterKey)]) {
+		return true
+	}
+	return false
 }
 
 func init() {
