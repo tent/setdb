@@ -128,6 +128,13 @@ func (s CommandSuite) TestCommands(c *C) {
 			wb.Close()
 		}
 		cmd.unlockKeys(args)
+		if stream, ok := res.(*cmdReplyStream); ok {
+			items := make([]cmdReply, 0, int(stream.size))
+			for item := range stream.items {
+				items = append(items, item)
+			}
+			res = items
+		}
 		c.Assert(res, DeepEquals, t.response, Commentf("%s %s, obtained=%s expected=%s", t.command, t.args, res, t.response))
 	}
 }

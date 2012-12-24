@@ -38,7 +38,15 @@ var SyntaxError = fmt.Errorf("syntax error")
 // nil []byte - nil response (must be part of multi-bulk reply), encoded as "$-1\r\n"
 // nil - nil multi-bulk reply, encoded as "*-1"
 // []cmdReply - multi-bulk reply, automatically serialized, members can be nil, []byte, or int
+// *cmdReplyStream - multi-bulk reply sent over a channel
 type cmdReply interface{}
+
+// if the number of items is known before the items,
+// they do not need to be buffered into memory, and can be streamed over a channel
+type cmdReplyStream struct {
+	size  int64         // the number of items that will be sent
+	items chan cmdReply // a multi-bulk reply item, one of nil, []byte, or int
+}
 
 type cmdFunc func(args [][]byte, wb *levigo.WriteBatch) cmdReply
 

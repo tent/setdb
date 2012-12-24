@@ -100,20 +100,25 @@ func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 		return []cmdReply{}
 	}
 
-	members := make([]cmdReply, 0, int(card))
-	it := DB.NewIterator(opts)
-	defer it.Close()
-	iterKey := NewKeyBuffer(SetKey, args[0], 0)
-	for it.Seek(iterKey.Key()); it.Valid(); it.Next() {
-		// If the prefix of the current key doesn't match the iteration key,
-		// we have reached the end of the set
-		key := it.Key()
-		if !iterKey.IsPrefixOf(key) {
-			break
+	// send the reply back over a channel since there could be a lot of items
+	stream := &cmdReplyStream{int64(card), make(chan cmdReply)}
+	go func() {
+		it := DB.NewIterator(opts)
+		defer it.Close()
+		iterKey := NewKeyBuffer(SetKey, args[0], 0)
+
+		for it.Seek(iterKey.Key()); it.Valid(); it.Next() {
+			// If the prefix of the current key doesn't match the iteration key,
+			// we have reached the end of the set
+			key := it.Key()
+			if !iterKey.IsPrefixOf(key) {
+				break
+			}
+			stream.items <- parseMemberFromSetKey(key)
 		}
-		members = append(members, parseMemberFromSetKey(key))
-	}
-	return members
+		close(stream.items)
+	}()
+	return stream
 }
 
 func Spop(args [][]byte, wb *levigo.WriteBatch) cmdReply {

@@ -247,33 +247,36 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 		withscores = true
 		items *= 2
 	}
-	res := make([]cmdReply, 0, items)
+	stream := &cmdReplyStream{items, make(chan cmdReply)}
 
-	it := DB.NewIterator(opts)
-	defer it.Close()
+	go func() {
+		it := DB.NewIterator(opts)
+		defer it.Close()
 
-	var i int64
-	iterKey := NewKeyBuffer(ZScoreKey, args[0], 0)
-	if reverse {
-		iterKey.ReverseIterKey()
-	}
-	for it.Seek(iterKey.Key()); it.Valid() && i <= end; i++ {
+		var i int64
+		iterKey := NewKeyBuffer(ZScoreKey, args[0], 0)
 		if reverse {
-			it.Prev()
+			iterKey.ReverseIterKey()
 		}
-		if i >= start {
-			score, member := parseZScoreKey(it.Key(), len(args[0]))
-			res = append(res, member)
-			if withscores {
-				res = append(res, ftoa(score))
+		for it.Seek(iterKey.Key()); it.Valid() && i <= end; i++ {
+			if reverse {
+				it.Prev()
+			}
+			if i >= start {
+				score, member := parseZScoreKey(it.Key(), len(args[0]))
+				stream.items <- member
+				if withscores {
+					stream.items <- ftoa(score)
+				}
+			}
+			if !reverse {
+				it.Next()
 			}
 		}
-		if !reverse {
-			it.Next()
-		}
-	}
+		close(stream.items)
+	}()
 
-	return res
+	return stream
 }
 
 func DelZset(key []byte, wb *levigo.WriteBatch) {

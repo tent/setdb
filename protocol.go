@@ -178,6 +178,8 @@ func writeReply(w io.Writer, reply cmdReply) (err error) {
 		err = writeError(w, reply.(error).Error())
 	case []cmdReply:
 		err = writeMultibulk(w, reply.([]cmdReply))
+	case *cmdReplyStream:
+		err = writeMultibulkStream(w, reply.(*cmdReplyStream))
 	default:
 		panic("Invalid reply type")
 	}
@@ -215,6 +217,20 @@ func writeBulk(w io.Writer, b []byte) error {
 	}
 	_, err = w.Write([]byte("\r\n"))
 	return err
+}
+
+func writeMultibulkStream(w io.Writer, reply *cmdReplyStream) error {
+	_, err := w.Write([]byte("*" + strconv.FormatInt(reply.size, 10) + "\r\n"))
+	if err != nil {
+		return err
+	}
+	for r := range reply.items {
+		err = writeReply(w, r)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeMultibulk(w io.Writer, reply []cmdReply) error {
