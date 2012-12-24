@@ -202,23 +202,27 @@ func Zrevrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 func zrange(args [][]byte, reverse bool) cmdReply {
 	// use a snapshot for this read so that the zcard is consistent
 	snapshot := DB.NewSnapshot()
-	defer DB.ReleaseSnapshot(snapshot)
 	opts := levigo.NewReadOptions()
 	opts.SetSnapshot(snapshot)
-	defer opts.Close()
 
 	count, err := zcard(metaKey(args[0]), opts)
 	if err != nil {
 		return err
+		DB.ReleaseSnapshot(snapshot)
+		opts.Close()
 	}
 	if count == 0 {
 		return []cmdReply{}
+		DB.ReleaseSnapshot(snapshot)
+		opts.Close()
 	}
 
 	start, err := strconv.ParseInt(string(args[1]), 10, 64)
 	end, err2 := strconv.ParseInt(string(args[2]), 10, 64)
 	if err != nil || err2 != nil {
 		return fmt.Errorf("value is not an integer or out of range")
+		DB.ReleaseSnapshot(snapshot)
+		opts.Close()
 	}
 
 	// if the index is negative, it is counting from the end, 
@@ -236,6 +240,8 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 	// the start comes after the end, so we're not going to find anything
 	if start > end {
 		return []cmdReply{}
+		DB.ReleaseSnapshot(snapshot)
+		opts.Close()
 	}
 
 	var withscores bool
@@ -243,6 +249,8 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 	if len(args) >= 4 {
 		if len(args[3]) != 10 || len(args) > 4 { // withscores flag
 			return SyntaxError
+			DB.ReleaseSnapshot(snapshot)
+			opts.Close()
 		}
 		withscores = true
 		items *= 2
@@ -274,6 +282,8 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 			}
 		}
 		close(stream.items)
+		DB.ReleaseSnapshot(snapshot)
+		opts.Close()
 	}()
 
 	return stream

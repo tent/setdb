@@ -87,17 +87,19 @@ func Sismember(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	// use a snapshot so that the cardinality is consistent with the iterator
 	snapshot := DB.NewSnapshot()
-	defer DB.ReleaseSnapshot(snapshot)
 	opts := levigo.NewReadOptions()
 	opts.SetSnapshot(snapshot)
-	defer opts.Close()
 
 	card, err := scard(metaKey(args[0]), opts)
 	if err != nil {
 		return err
+		DB.ReleaseSnapshot(snapshot)
+		opts.Close()
 	}
 	if card == 0 {
 		return []cmdReply{}
+		DB.ReleaseSnapshot(snapshot)
+		opts.Close()
 	}
 
 	// send the reply back over a channel since there could be a lot of items
@@ -117,6 +119,8 @@ func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 			stream.items <- parseMemberFromSetKey(key)
 		}
 		close(stream.items)
+		DB.ReleaseSnapshot(snapshot)
+		opts.Close()
 	}()
 	return stream
 }
