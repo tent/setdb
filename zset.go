@@ -36,6 +36,12 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 	setKey := NewKeyBuffer(ZSetKey, args[0], len(args[2]))
 	scoreKey := NewKeyBuffer(ZScoreKey, args[0], 8+len(args[2]))
 
+	mk := metaKey(args[0])
+	card, err := zcard(mk, nil)
+	if err != nil {
+		return err
+	}
+
 	// Iterate through each of the score/member pairs
 	for i := 1; i < len(args); i += 2 {
 		var err error
@@ -46,9 +52,12 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 
 		// Check if the member exists
 		setKey.SetSuffix(args[i+1])
-		res, err := DB.Get(DefaultReadOptions, setKey.Key())
-		if err != nil {
-			return err
+		var res []byte
+		if card > 0 {
+			res, err = DB.Get(DefaultReadOptions, setKey.Key())
+			if err != nil {
+				return err
+			}
 		}
 
 		// set the score key with 8 empty bytes before the member for the score
@@ -81,11 +90,6 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 
 	// Update the set metadata with the new cardinality
 	if newMembers > 0 {
-		mk := metaKey(args[0])
-		card, err := zcard(mk, nil)
-		if err != nil {
-			return err
-		}
 		data := make([]byte, 5)
 		data[0] = ZCardValue
 

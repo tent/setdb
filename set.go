@@ -10,25 +10,27 @@ import (
 func Sadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	var newMembers uint32
 	key := NewKeyBuffer(SetKey, args[0], len(args[1]))
+	mk := metaKey(args[0])
+	card, err := scard(mk, nil)
+	if err != nil {
+		return err
+	}
 
 	for _, member := range args[1:] {
 		key.SetSuffix(member)
-		res, err := DB.Get(DefaultReadOptions, key.Key())
-		if err != nil {
-			return err
-		}
-		if res != nil {
-			continue
+		if card > 0 {
+			res, err := DB.Get(DefaultReadOptions, key.Key())
+			if err != nil {
+				return err
+			}
+			if res != nil {
+				continue
+			}
 		}
 		wb.Put(key.Key(), []byte{})
 		newMembers++
 	}
 	if newMembers > 0 {
-		mk := metaKey(args[0])
-		card, err := scard(mk, nil)
-		if err != nil {
-			return err
-		}
 		setCard(mk, card+newMembers, wb)
 	}
 	return newMembers
