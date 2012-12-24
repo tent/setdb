@@ -76,7 +76,7 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 
 	// Update the set metadata with the new cardinality
 	if newMembers > 0 {
-		card, err := zcard(args[0])
+		card, err := zcard(args[0], nil)
 		if err != nil {
 			return err
 		}
@@ -110,15 +110,18 @@ func Zscore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 }
 
 func Zcard(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	c, err := zcard(args[0])
+	c, err := zcard(args[0], nil)
 	if err != nil {
 		return err
 	}
 	return c
 }
 
-func zcard(key []byte) (uint32, error) {
-	res, err := DB.Get(DefaultReadOptions, metaKey(key))
+func zcard(key []byte, opts *levigo.ReadOptions) (uint32, error) {
+	if opts == nil {
+		opts = DefaultReadOptions
+	}
+	res, err := DB.Get(opts, metaKey(key))
 	if err != nil {
 		return 0, err
 	}
@@ -135,7 +138,7 @@ func zcard(key []byte) (uint32, error) {
 }
 
 func Zrem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	card, err := zcard(args[0])
+	card, err := zcard(args[0], nil)
 	if err != nil {
 		return err
 	}
@@ -186,7 +189,14 @@ func Zrevrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 }
 
 func zrange(args [][]byte, reverse bool) cmdReply {
-	count, err := zcard(args[0])
+	// use a snapshot for this read so that the zcard is consistent
+	snapshot := DB.NewSnapshot()
+	defer DB.ReleaseSnapshot(snapshot)
+	opts := levigo.NewReadOptions()
+	opts.SetSnapshot(snapshot)
+	defer opts.Close()
+
+	count, err := zcard(args[0], opts)
 	if err != nil {
 		return err
 	}
@@ -228,7 +238,7 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 	}
 	res := make([]cmdReply, 0, items)
 
-	it := DB.NewIterator(DefaultReadOptions)
+	it := DB.NewIterator(opts)
 	defer it.Close()
 
 	var i int64

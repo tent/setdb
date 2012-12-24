@@ -7,11 +7,11 @@ import (
 
 type LockRing struct {
 	size  uint32
-	locks []sync.RWMutex
+	locks []sync.Mutex
 }
 
 func NewLockRing(n uint32) *LockRing {
-	return &LockRing{n, make([]sync.RWMutex, n)}
+	return &LockRing{n, make([]sync.Mutex, n)}
 }
 
 func (l *LockRing) Lock(k []byte) {
@@ -22,14 +22,6 @@ func (l *LockRing) Unlock(k []byte) {
 	l.lockForKey(k).Unlock()
 }
 
-func (l *LockRing) RLock(k []byte) {
-	l.lockForKey(k).RLock()
-}
-
-func (l *LockRing) RUnlock(k []byte) {
-	l.lockForKey(k).RUnlock()
-}
-
-func (l *LockRing) lockForKey(k []byte) *sync.RWMutex {
+func (l *LockRing) lockForKey(k []byte) *sync.Mutex {
 	return &l.locks[int(crc32.ChecksumIEEE(k)%l.size)]
 }

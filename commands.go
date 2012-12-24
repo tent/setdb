@@ -86,22 +86,20 @@ func (c *cmdDesc) getKeys(args [][]byte) [][]byte {
 
 // acquires a read or write lock for the keys in arguments using the cmdDesc
 func (c *cmdDesc) lockKeys(args [][]byte) {
+	if !c.writes {
+		return
+	}
 	for _, k := range c.getKeys(args) {
-		if c.writes {
-			KeyMutex.Lock(k)
-		} else {
-			KeyMutex.RLock(k)
-		}
+		KeyMutex.Lock(k)
 	}
 }
 
 func (c *cmdDesc) unlockKeys(args [][]byte) {
+	if !c.writes {
+		return
+	}
 	for _, k := range c.getKeys(args) {
-		if c.writes {
-			KeyMutex.Unlock(k)
-		} else {
-			KeyMutex.RUnlock(k)
-		}
+		KeyMutex.Unlock(k)
 	}
 }
 
