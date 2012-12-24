@@ -9,32 +9,33 @@ import (
 
 func Sadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	var newMembers uint32
-	empty := []byte{}
+	key := NewKeyBuffer(SetKey, args[0], len(args[1]))
 
 	for _, member := range args[1:] {
-		key := setKey(args[0], member)
-		res, err := DB.Get(DefaultReadOptions, key)
+		key.SetSuffix(member)
+		res, err := DB.Get(DefaultReadOptions, key.Key())
 		if err != nil {
 			return err
 		}
 		if res != nil {
 			continue
 		}
-		wb.Put(key, empty)
+		wb.Put(key.Key(), []byte{})
 		newMembers++
 	}
 	if newMembers > 0 {
-		card, err := scard(args[0], nil)
+		mk := metaKey(args[0])
+		card, err := scard(mk, nil)
 		if err != nil {
 			return err
 		}
-		setCard(args[0], card+newMembers, wb)
+		setCard(mk, card+newMembers, wb)
 	}
 	return newMembers
 }
 
 func Scard(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	card, err := scard(args[0], nil)
+	card, err := scard(metaKey(args[0]), nil)
 	if err != nil {
 		return err
 	}
@@ -42,7 +43,8 @@ func Scard(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 }
 
 func Srem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	card, err := scard(args[0], nil)
+	mk := metaKey(args[0])
+	card, err := scard(mk, nil)
 	if err != nil {
 		return err
 	}
@@ -50,28 +52,29 @@ func Srem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 		return card
 	}
 	var deleted uint32
+	key := NewKeyBuffer(SetKey, args[0], len(args[1]))
 	for _, member := range args[1:] {
-		key := setKey(args[0], member)
-		res, err := DB.Get(DefaultReadOptions, key)
+		key.SetSuffix(member)
+		res, err := DB.Get(DefaultReadOptions, key.Key())
 		if err != nil {
 			return err
 		}
 		if res == nil {
 			continue
 		}
-		wb.Delete(key)
+		wb.Delete(key.Key())
 		deleted++
 	}
 	if deleted == card {
-		wb.Delete(metaKey(args[0]))
+		wb.Delete(mk)
 	} else if deleted > 0 { // decrement the cardinality
-		setCard(args[0], card-deleted, wb)
+		setCard(mk, card-deleted, wb)
 	}
 	return deleted
 }
 
 func Sismember(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	res, err := DB.Get(DefaultReadOptions, setKey(args[0], args[1]))
+	res, err := DB.Get(DefaultReadOptions, NewKeyBufferWithSuffix(SetKey, args[0], args[1]).Key())
 	if err != nil {
 		return err
 	}
@@ -89,7 +92,7 @@ func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	opts.SetSnapshot(snapshot)
 	defer opts.Close()
 
-	card, err := scard(args[0], opts)
+	card, err := scard(metaKey(args[0]), opts)
 	if err != nil {
 		return err
 	}
@@ -100,12 +103,12 @@ func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	members := make([]cmdReply, 0, int(card))
 	it := DB.NewIterator(opts)
 	defer it.Close()
-	iterKey := setIterKey(args[0])
-	for it.Seek(iterKey); it.Valid(); it.Next() {
+	iterKey := NewKeyBuffer(SetKey, args[0], 0)
+	for it.Seek(iterKey.Key()); it.Valid(); it.Next() {
 		// If the prefix of the current key doesn't match the iteration key,
 		// we have reached the end of the set
 		key := it.Key()
-		if pastKey(iterKey, key) {
+		if !iterKey.IsPrefixOf(key) {
 			break
 		}
 		members = append(members, parseMemberFromSetKey(key))
@@ -114,22 +117,25 @@ func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 }
 
 func Spop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	card, err := scard(args[0], nil)
+	mk := metaKey(args[0])
+	card, err := scard(mk, nil)
 	if err != nil {
 		return err
 	}
 	if card == 0 {
 		return nil
 	}
-	member := srand(args[0])
+	key := NewKeyBuffer(SetKey, args[0], 1)
+	member := srand(key)
 	if member == nil {
 		return nil
 	}
-	wb.Delete(setKey(args[0], member))
+	key.SetSuffix(member)
+	wb.Delete(key.Key())
 	if card == 1 { // we're removing the last remaining member
-		wb.Delete(metaKey(args[0]))
+		wb.Delete(mk)
 	} else {
-		setCard(args[0], card-1, wb)
+		setCard(mk, card-1, wb)
 	}
 	return member
 }
@@ -137,15 +143,15 @@ func Spop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 func DelSet(key []byte, wb *levigo.WriteBatch) {
 	it := DB.NewIterator(DefaultReadOptions)
 	defer it.Close()
-	iterKey := setIterKey(key)
-	for it.Seek(iterKey); it.Valid(); it.Next() {
-		key := it.Key()
+	iterKey := NewKeyBuffer(SetKey, key, 0)
+	for it.Seek(iterKey.Key()); it.Valid(); it.Next() {
+		k := it.Key()
 		// If the prefix of the current key doesn't match the iteration key,
 		// we have reached the end of the set
-		if pastKey(iterKey, key) {
+		if !iterKey.IsPrefixOf(k) {
 			break
 		}
-		wb.Delete(key)
+		wb.Delete(k)
 	}
 }
 
@@ -153,7 +159,7 @@ func scard(key []byte, opts *levigo.ReadOptions) (uint32, error) {
 	if opts == nil {
 		opts = DefaultReadOptions
 	}
-	res, err := DB.Get(opts, metaKey(key))
+	res, err := DB.Get(opts, key)
 	if err != nil {
 		return 0, err
 	}
@@ -169,21 +175,21 @@ func scard(key []byte, opts *levigo.ReadOptions) (uint32, error) {
 	return binary.BigEndian.Uint32(res[1:]), nil
 }
 
-func srand(key []byte) []byte {
+func srand(key *KeyBuffer) []byte {
 	it := DB.NewIterator(DefaultReadOptions)
 	defer it.Close()
-	iterKey := randSetIterKey(key)
-	it.Seek(iterKey)
+	rand.Read(key.SuffixForRead(1))
+	it.Seek(key.Key())
 	if !it.Valid() {
 		return nil
 	}
 	k := it.Key()
 	// check if we are in the set
 	// if we aren't it's possible that we ended up at the end, so go back a key
-	if pastKey(iterKey[:len(iterKey)-1], k) {
+	if !key.IsPrefixOf(k) {
 		it.Prev()
 		k = it.Key()
-		if pastKey(iterKey[:len(iterKey)-1], k) {
+		if !key.IsPrefixOf(k) {
 			return nil
 		}
 	}
@@ -194,34 +200,7 @@ func setCard(key []byte, card uint32, wb *levigo.WriteBatch) {
 	data := make([]byte, 5)
 	data[0] = SetCardValue
 	binary.BigEndian.PutUint32(data[1:], card)
-	wb.Put(metaKey(key), data)
-}
-
-func setKey(k, member []byte) []byte {
-	key := make([]byte, 5+len(k)+len(member))
-	key[0] = SetKey
-	binary.BigEndian.PutUint32(key[1:], uint32(len(k)))
-	copy(key[5:], k)
-	copy(key[5+len(k):], member)
-	return key
-}
-
-func setIterKey(k []byte) []byte {
-	key := make([]byte, 5+len(k))
-	key[0] = SetKey
-	binary.BigEndian.PutUint32(key[1:], uint32(len(k)))
-	copy(key[5:], k)
-	return key
-}
-
-func randSetIterKey(k []byte) []byte {
-	key := make([]byte, 6+len(k))
-	key[0] = SetKey
-	binary.BigEndian.PutUint32(key[1:], uint32(len(k)))
-	copy(key[5:], k)
-	// add a random byte after the key so we end up somewhere random
-	rand.Reader.Read(key[5+len(k):])
-	return key
+	wb.Put(key, data)
 }
 
 func parseMemberFromSetKey(key []byte) []byte {

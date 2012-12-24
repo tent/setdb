@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/jmhodges/levigo"
@@ -122,8 +121,10 @@ func Echo(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 
 func Del(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	deleted := 0
+	k := make([]byte, 1, len(args[0])) // make a reusable slice with room for the first metakey
+
 	for _, key := range args {
-		k := metaKey(key)
+		k = bufMetaKey(k, key)
 		res, err := DB.Get(DefaultReadOptions, k)
 		if err != nil {
 			return err
@@ -154,18 +155,17 @@ func del(key []byte, t byte, wb *levigo.WriteBatch) {
 	}
 }
 
+// set buf to the metaKey for key
+func bufMetaKey(buf []byte, key []byte) []byte {
+	buf[0] = MetaKey
+	return append(buf[:1], key...)
+}
+
 func metaKey(k []byte) []byte {
 	key := make([]byte, 1+len(k))
 	key[0] = MetaKey
 	copy(key[1:], k)
 	return key
-}
-
-func pastKey(iterKey, key []byte) bool {
-	if len(key) <= len(iterKey) || !bytes.Equal(iterKey, key[:len(iterKey)]) {
-		return true
-	}
-	return false
 }
 
 func init() {
