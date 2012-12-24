@@ -133,7 +133,7 @@ func Del(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 
 	for _, key := range args {
 		k = bufMetaKey(k, key)
-		res, err := DB.Get(DefaultReadOptions, k)
+		res, err := DB.Get(ReadWithoutCacheFill, k)
 		if err != nil {
 			return err
 		}

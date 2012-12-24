@@ -11,6 +11,7 @@ import (
 var DB *levigo.DB
 var DefaultReadOptions = levigo.NewReadOptions()
 var DefaultWriteOptions = levigo.NewWriteOptions()
+var ReadWithoutCacheFill = levigo.NewReadOptions()
 
 func openDB() {
 	opts := levigo.NewOptions()
@@ -36,4 +37,8 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	openDB()
 	listen()
+}
+
+func init() {
+	ReadWithoutCacheFill.SetFillCache(false)
 }

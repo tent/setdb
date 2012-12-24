@@ -55,7 +55,7 @@ func Srem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	key := NewKeyBuffer(SetKey, args[0], len(args[1]))
 	for _, member := range args[1:] {
 		key.SetSuffix(member)
-		res, err := DB.Get(DefaultReadOptions, key.Key())
+		res, err := DB.Get(ReadWithoutCacheFill, key.Key())
 		if err != nil {
 			return err
 		}
@@ -146,7 +146,7 @@ func Spop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 }
 
 func DelSet(key []byte, wb *levigo.WriteBatch) {
-	it := DB.NewIterator(DefaultReadOptions)
+	it := DB.NewIterator(ReadWithoutCacheFill)
 	defer it.Close()
 	iterKey := NewKeyBuffer(SetKey, key, 0)
 	for it.Seek(iterKey.Key()); it.Valid(); it.Next() {

@@ -159,7 +159,7 @@ func Zrem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	// Delete each of the members
 	for _, member := range args[1:] {
 		setKey.SetSuffix(member)
-		res, err := DB.Get(DefaultReadOptions, setKey.Key())
+		res, err := DB.Get(ReadWithoutCacheFill, setKey.Key())
 		if err != nil {
 			return nil
 		}
@@ -281,7 +281,7 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 
 func DelZset(key []byte, wb *levigo.WriteBatch) {
 	// TODO: count keys to verify everything works as expected?
-	it := DB.NewIterator(DefaultReadOptions)
+	it := DB.NewIterator(ReadWithoutCacheFill)
 	defer it.Close()
 	iterKey := NewKeyBuffer(ZSetKey, key, 0)
 	scoreKey := NewKeyBuffer(ZScoreKey, key, 0)
