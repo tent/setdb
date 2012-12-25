@@ -6,6 +6,13 @@ import (
 	"github.com/jmhodges/levigo"
 )
 
+// Keys stored in LevelDB for strings
+//
+// MetadataKey | key = StringLengthValue | string length uint32
+//
+// For each key:
+// StringKey | key = value
+
 func Set(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	key := metaKey(args[0])
 	res, err := DB.Get(DefaultReadOptions, key)

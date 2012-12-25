@@ -7,6 +7,13 @@ import (
 	"github.com/jmhodges/levigo"
 )
 
+// Keys stored in LevelDB for sets
+//
+// MetadataKey | key = SetCardValue | count of members uint32
+//
+// For each member:
+// SetKey | key length uint32 | key | member = empty
+
 func Sadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	var newMembers uint32
 	key := NewKeyBuffer(SetKey, args[0], len(args[1]))

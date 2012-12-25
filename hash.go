@@ -8,6 +8,13 @@ import (
 	"github.com/jmhodges/levigo"
 )
 
+// Keys stored in LevelDB for hashes
+//
+// MetadataKey | key = HashLengthValue | count of fields uint32
+//
+// For each field:
+// HashKey | key length uint32 | key | field = value
+
 func Hset(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return hset(args, true, wb)
 }

@@ -9,14 +9,13 @@ import (
 	"github.com/jmhodges/levigo"
 )
 
-/* Keys stored in LevelDB for zsets
- *
- * MetadataKey | key = ZCardValue | count of members uint32 
- *
- * For each member:
- * ZSetKey   | key length uint32 | key | member = score float64
- * ZScoreKey | key length uint32 | key | score float64 | member = empty
- */
+// Keys stored in LevelDB for zsets
+//
+// MetadataKey | key = ZCardValue | count of members uint32
+//
+// For each member:
+// ZSetKey   | key length uint32 | key | member = score float64
+// ZScoreKey | key length uint32 | key | score float64 | member = empty
 
 func Zadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	if (len(args)-1)%2 != 0 {
