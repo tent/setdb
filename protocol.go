@@ -160,7 +160,7 @@ func handleClient(client net.Conn) {
 }
 
 func writeReply(w io.Writer, reply cmdReply) (err error) {
-	if reply == nil {
+	if _, ok := reply.([]cmdReply); !ok && reply == nil {
 		return writeNil(w)
 	}
 	switch reply.(type) {
@@ -189,7 +189,7 @@ func writeReply(w io.Writer, reply cmdReply) (err error) {
 }
 
 func writeNil(w io.Writer) error {
-	_, err := w.Write([]byte("*-1\r\n"))
+	_, err := w.Write([]byte("$-1\r\n"))
 	return err
 }
 
@@ -236,6 +236,10 @@ func writeMultibulkStream(w io.Writer, reply *cmdReplyStream) error {
 }
 
 func writeMultibulk(w io.Writer, reply []cmdReply) error {
+	if reply == nil {
+		err := writeMultibulkLength(w, -1)
+		return err
+	}
 	err := writeMultibulkLength(w, int64(len(reply)))
 	if err != nil {
 		return err

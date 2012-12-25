@@ -38,9 +38,9 @@ var SyntaxError = fmt.Errorf("syntax error")
 // error - error message, automatically prefixed with "-"
 // int - integer number, automatically encoded and prefixed with ":"
 // []byte - bulk reply, automatically prefixed with the length like "$3\r\n"
-// nil []byte - nil response (must be part of multi-bulk reply), encoded as "$-1\r\n"
-// nil - nil multi-bulk reply, encoded as "*-1"
+// nil, nil []byte - nil response, encoded as "$-1\r\n"
 // []cmdReply - multi-bulk reply, automatically serialized, members can be nil, []byte, or int
+// nil []cmdReply - nil multi-bulk reply, serialized as "*-1\r\n"
 // map[string]bool - multi-bulk reply (used by SUNION)
 // *cmdReplyStream - multi-bulk reply sent over a channel
 type cmdReply interface{}
