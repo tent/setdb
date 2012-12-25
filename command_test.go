@@ -17,11 +17,8 @@ type CommandSuite struct{}
 var _ = Suite(&CommandSuite{})
 
 func (s CommandSuite) SetUpSuite(c *C) {
-	openDB()
-}
-
-func (s CommandSuite) TearDownSuite(c *C) {
 	os.RemoveAll("db")
+	openDB()
 }
 
 func MaybeFail(c *C, err error) {
@@ -146,6 +143,7 @@ var tests = []struct {
 	{"hset", "hash2 fooa 5.0e3", 0},
 	{"hincrbyfloat", "hash2 fooa 2.0e2", []byte("5200")},
 	{"hget", "hash2 fooa", []byte("5200")},
+	{"keys", "hash*", []cmdReply{[]byte("hash"), []byte("hash2")}},
 }
 
 func (s CommandSuite) TestCommands(c *C) {

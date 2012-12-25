@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -80,6 +81,7 @@ var commandList = []cmdDesc{
 	{"hset", Hset, 3, true, 0, 0, 0},
 	{"hsetnx", Hsetnx, 3, true, 0, 0, 0},
 	{"hvals", Hvals, 1, false, 0, 0, 0},
+	{"keys", Keys, 1, false, 0, 0, 0},
 	{"ping", Ping, 0, false, -1, 0, 0},
 	{"set", Set, 2, true, 0, 0, 0},
 	{"sadd", Sadd, -2, true, 0, 0, 0},
@@ -153,6 +155,30 @@ func Time(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return []cmdReply{[]byte(secs), []byte(micros)}
 }
 
+func Keys(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	it := DB.NewIterator(ReadWithoutCacheFill)
+	defer it.Close()
+	keys := make([]cmdReply, 0)
+	pattern := string(args[0])
+
+	for it.Seek([]byte{MetaKey}); it.Valid(); it.Next() {
+		k := it.Key()
+		// if the first byte isn't MetaKey, we've reached the end
+		if len(k) < 2 || k[0] != MetaKey {
+			break
+		}
+		// filepatch.Match() implements the same pattern syntax as we want
+		matched, err := filepath.Match(pattern, string(k[1:]))
+		if err != nil {
+			return fmt.Errorf("invalid pattern for 'keys' command")
+		}
+		if matched {
+			keys = append(keys, k[1:])
+		}
+	}
+	return keys
+}
+
 func Del(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	deleted := 0
 	k := make([]byte, 1, len(args[0])) // make a reusable slice with room for the first metakey
@@ -212,7 +238,6 @@ func init() {
 
 // Keys
 // DUMP
-// KEYS
 // EXISTS
 // EXPIRE
 // EXPIREAT
