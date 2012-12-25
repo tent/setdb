@@ -210,22 +210,22 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 
 	count, err := zcard(metaKey(args[0]), opts)
 	if err != nil {
-		return err
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
+		return err
 	}
 	if count == 0 {
-		return []cmdReply{}
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
+		return []cmdReply{}
 	}
 
 	start, err := strconv.ParseInt(string(args[1]), 10, 64)
 	end, err2 := strconv.ParseInt(string(args[2]), 10, 64)
 	if err != nil || err2 != nil {
-		return fmt.Errorf("value is not an integer or out of range")
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
+		return fmt.Errorf("value is not an integer or out of range")
 	}
 
 	// if the index is negative, it is counting from the end, 
@@ -242,18 +242,18 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 	}
 	// the start comes after the end, so we're not going to find anything
 	if start > end {
-		return []cmdReply{}
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
+		return []cmdReply{}
 	}
 
 	var withscores bool
 	items := end + 1 - start
 	if len(args) >= 4 {
 		if len(args[3]) != 10 || len(args) > 4 { // withscores flag
-			return SyntaxError
 			DB.ReleaseSnapshot(snapshot)
 			opts.Close()
+			return SyntaxError
 		}
 		withscores = true
 		items *= 2
