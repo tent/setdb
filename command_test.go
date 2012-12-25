@@ -144,6 +144,8 @@ var tests = []struct {
 	{"hincrbyfloat", "hash2 fooa 2.0e2", []byte("5200")},
 	{"hget", "hash2 fooa", []byte("5200")},
 	{"keys", "hash*", []cmdReply{[]byte("hash"), []byte("hash2")}},
+	{"del", "hash2", 1},
+	{"hlen", "hash2", uint32(0)},
 }
 
 func (s CommandSuite) TestCommands(c *C) {
