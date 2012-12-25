@@ -64,6 +64,19 @@ var commandList = []cmdDesc{
 	{"del", Del, -1, true, 0, -1, 1},
 	{"echo", Echo, 1, false, -1, 0, 0},
 	{"get", Get, 1, false, 0, 0, 0},
+	{"hdel", Hdel, -2, true, 0, 0, 0},
+	{"hexists", Hexists, 2, false, 0, 0, 0},
+	{"hget", Hget, 2, false, 0, 0, 0},
+	{"hgetall", Hgetall, 1, false, 0, 0, 0},
+	{"hincrby", Hincrby, 3, true, 0, 0, 0},
+	{"hincrbyfloat", Hincrbyfloat, 3, true, 0, 0, 0},
+	{"hkeys", Hkeys, 1, false, 0, 0, 0},
+	{"hlen", Hlen, 1, false, 0, 0, 0},
+	{"hmget", Hmget, -2, false, 0, 0, 0},
+	{"hmset", Hmset, -3, true, 0, 0, 0},
+	{"hset", Hset, 3, true, 0, 0, 0},
+	{"hsetnx", Hsetnx, 3, true, 0, 0, 0},
+	{"hvals", Hvals, 1, false, 0, 0, 0},
 	{"ping", Ping, 0, false, -1, 0, 0},
 	{"set", Set, 2, true, 0, 0, 0},
 	{"sadd", Sadd, -2, true, 0, 0, 0},
@@ -154,6 +167,8 @@ func del(key []byte, t byte, wb *levigo.WriteBatch) {
 	switch t {
 	case StringLengthValue:
 		DelString(key, wb)
+	case HashLengthValue:
+		DelHash(key, wb)
 	case SetCardValue:
 		DelSet(key, wb)
 	case ZCardValue:
