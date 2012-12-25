@@ -180,6 +180,8 @@ func writeReply(w io.Writer, reply cmdReply) (err error) {
 		err = writeMultibulk(w, reply.([]cmdReply))
 	case *cmdReplyStream:
 		err = writeMultibulkStream(w, reply.(*cmdReplyStream))
+	case map[string]bool:
+		err = writeMultibulkStringMap(w, reply.(map[string]bool))
 	default:
 		panic("Invalid reply type")
 	}
@@ -220,7 +222,7 @@ func writeBulk(w io.Writer, b []byte) error {
 }
 
 func writeMultibulkStream(w io.Writer, reply *cmdReplyStream) error {
-	_, err := w.Write([]byte("*" + strconv.FormatInt(reply.size, 10) + "\r\n"))
+	err := writeMultibulkLength(w, reply.size)
 	if err != nil {
 		return err
 	}
@@ -234,7 +236,7 @@ func writeMultibulkStream(w io.Writer, reply *cmdReplyStream) error {
 }
 
 func writeMultibulk(w io.Writer, reply []cmdReply) error {
-	_, err := w.Write([]byte("*" + strconv.Itoa(len(reply)) + "\r\n"))
+	err := writeMultibulkLength(w, int64(len(reply)))
 	if err != nil {
 		return err
 	}
@@ -245,6 +247,25 @@ func writeMultibulk(w io.Writer, reply []cmdReply) error {
 		}
 	}
 	return nil
+}
+
+func writeMultibulkStringMap(w io.Writer, reply map[string]bool) error {
+	err := writeMultibulkLength(w, int64(len(reply)))
+	if err != nil {
+		return err
+	}
+	for r, _ := range reply {
+		err = writeBulk(w, []byte(r))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeMultibulkLength(w io.Writer, n int64) error {
+	_, err := w.Write([]byte("*" + strconv.FormatInt(n, 10) + "\r\n"))
+	return err
 }
 
 func writeError(w io.Writer, msg string) error {

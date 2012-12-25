@@ -171,6 +171,27 @@ func Smove(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return 1
 }
 
+func Sunion(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	union := make(map[string]bool)
+
+	iterKey := NewKeyBuffer(SetKey, args[0], 0)
+	it := DB.NewIterator(DefaultReadOptions)
+	defer it.Close()
+
+	for _, key := range args {
+		iterKey.SetKey(key)
+		for it.Seek(iterKey.Key()); it.Valid(); it.Next() {
+			k := it.Key()
+			if !iterKey.IsPrefixOf(k) {
+				break
+			}
+			union[string(k[len(iterKey.Key()):])] = true
+		}
+	}
+
+	return union
+}
+
 func DelSet(key []byte, wb *levigo.WriteBatch) {
 	it := DB.NewIterator(ReadWithoutCacheFill)
 	defer it.Close()
@@ -244,5 +265,4 @@ func parseMemberFromSetKey(key []byte) []byte {
 // SINTER
 // SINTERSTORE
 // SRANDMEMBER
-// SUNION
 // SUNIONSTORE

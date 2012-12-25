@@ -40,6 +40,7 @@ var SyntaxError = fmt.Errorf("syntax error")
 // nil []byte - nil response (must be part of multi-bulk reply), encoded as "$-1\r\n"
 // nil - nil multi-bulk reply, encoded as "*-1"
 // []cmdReply - multi-bulk reply, automatically serialized, members can be nil, []byte, or int
+// map[string]bool - multi-bulk reply (used by SUNION)
 // *cmdReplyStream - multi-bulk reply sent over a channel
 type cmdReply interface{}
 
@@ -88,6 +89,7 @@ var commandList = []cmdDesc{
 	{"smove", Smove, 3, true, 0, 1, 0},
 	{"spop", Spop, 1, true, 0, 0, 0},
 	{"srem", Srem, -2, true, 0, 0, 0},
+	{"sunion", Sunion, -1, false, 0, -1, 1},
 	{"time", Time, 0, false, 0, 0, 0},
 	{"zadd", Zadd, -3, true, 0, 0, 0},
 	{"zcard", Zcard, 1, false, 0, 0, 0},
