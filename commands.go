@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/jmhodges/levigo"
 	"github.com/titanous/setdb/lockring"
@@ -85,6 +87,7 @@ var commandList = []cmdDesc{
 	{"smembers", Smembers, 1, false, 0, 0, 0},
 	{"spop", Spop, 1, true, 0, 0, 0},
 	{"srem", Srem, -2, true, 0, 0, 0},
+	{"time", Time, 0, false, 0, 0, 0},
 	{"zadd", Zadd, -3, true, 0, 0, 0},
 	{"zcard", Zcard, 1, false, 0, 0, 0},
 	{"zincrby", Zincrby, 3, true, 0, 0, 0},
@@ -138,6 +141,13 @@ func Ping(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 
 func Echo(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return args[0]
+}
+
+func Time(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	now := time.Now()
+	secs := strconv.FormatInt(now.Unix(), 10)
+	micros := strconv.Itoa(now.Nanosecond() / 1000)
+	return []cmdReply{[]byte(secs), []byte(micros)}
 }
 
 func Del(args [][]byte, wb *levigo.WriteBatch) cmdReply {
@@ -268,7 +278,6 @@ func init() {
 // FLUSHALL
 // FLUSHDB
 // SYNC
-// TIME
 // CONFIG RESETSTAT
 // INFO
 // DBSIZE
