@@ -146,6 +146,8 @@ var tests = []struct {
 	{"keys", "hash*", []cmdReply{[]byte("hash"), []byte("hash2")}},
 	{"del", "hash2", 1},
 	{"hlen", "hash2", uint32(0)},
+	{"exists", "hash", 1},
+	{"exists", "hash2", 0},
 }
 
 func (s CommandSuite) TestCommands(c *C) {

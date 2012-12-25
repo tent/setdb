@@ -67,6 +67,7 @@ type cmdDesc struct {
 var commandList = []cmdDesc{
 	{"del", Del, -1, true, 0, -1, 1},
 	{"echo", Echo, 1, false, -1, 0, 0},
+	{"exists", Exists, 1, false, 0, 0, 0},
 	{"get", Get, 1, false, 0, 0, 0},
 	{"hdel", Hdel, -2, true, 0, 0, 0},
 	{"hexists", Hexists, 2, false, 0, 0, 0},
@@ -155,6 +156,17 @@ func Time(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return []cmdReply{[]byte(secs), []byte(micros)}
 }
 
+func Exists(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	res, err := DB.Get(DefaultReadOptions, metaKey(args[0]))
+	if err != nil {
+		return err
+	}
+	if res == nil {
+		return 0
+	}
+	return 1
+}
+
 func Keys(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	it := DB.NewIterator(ReadWithoutCacheFill)
 	defer it.Close()
@@ -238,7 +250,6 @@ func init() {
 
 // Keys
 // DUMP
-// EXISTS
 // EXPIRE
 // EXPIREAT
 // MIGRATE
