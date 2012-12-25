@@ -151,6 +151,26 @@ func Spop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return member
 }
 
+func Smove(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	resp, err := DB.Get(DefaultReadOptions, NewKeyBufferWithSuffix(SetKey, args[0], args[2]).Key())
+	if err != nil {
+		return err
+	}
+	if resp == nil {
+		return 0
+	}
+
+	res := Srem([][]byte{args[0], args[2]}, wb)
+	if err, ok := res.(error); ok {
+		return err
+	}
+	res = Sadd([][]byte{args[1], args[2]}, wb)
+	if err, ok := res.(error); ok {
+		return err
+	}
+	return 1
+}
+
 func DelSet(key []byte, wb *levigo.WriteBatch) {
 	it := DB.NewIterator(ReadWithoutCacheFill)
 	defer it.Close()
@@ -223,7 +243,6 @@ func parseMemberFromSetKey(key []byte) []byte {
 // SDIFFSTORE
 // SINTER
 // SINTERSTORE
-// SMOVE
 // SRANDMEMBER
 // SUNION
 // SUNIONSTORE

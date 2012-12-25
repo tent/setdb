@@ -85,6 +85,7 @@ var commandList = []cmdDesc{
 	{"scard", Scard, 1, false, 0, 0, 0},
 	{"sismember", Sismember, 2, false, 0, 0, 0},
 	{"smembers", Smembers, 1, false, 0, 0, 0},
+	{"smove", Smove, 3, true, 0, 1, 0},
 	{"spop", Spop, 1, true, 0, 0, 0},
 	{"srem", Srem, -2, true, 0, 0, 0},
 	{"time", Time, 0, false, 0, 0, 0},
