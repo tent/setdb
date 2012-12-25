@@ -148,6 +148,10 @@ var tests = []struct {
 	{"hlen", "hash2", uint32(0)},
 	{"exists", "hash", 1},
 	{"exists", "hash2", 0},
+	{"type", "hash", "hash"},
+	{"type", "asdf", "string"},
+	{"type", "newset", "set"},
+	{"type", "fooz", "zset"},
 }
 
 func (s CommandSuite) TestCommands(c *C) {

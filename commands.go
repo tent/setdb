@@ -94,6 +94,7 @@ var commandList = []cmdDesc{
 	{"srem", Srem, -2, true, 0, 0, 0},
 	{"sunion", Sunion, -1, false, 0, -1, 1},
 	{"time", Time, 0, false, -1, 0, 0},
+	{"type", Type, 1, false, 0, 0, 0},
 	{"zadd", Zadd, -3, true, 0, 0, 0},
 	{"zcard", Zcard, 1, false, 0, 0, 0},
 	{"zincrby", Zincrby, 3, true, 0, 0, 0},
@@ -165,6 +166,32 @@ func Exists(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 		return 0
 	}
 	return 1
+}
+
+func Type(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	res, err := DB.Get(DefaultReadOptions, metaKey(args[0]))
+	if err != nil {
+		return err
+	}
+	if res == nil {
+		return "none"
+	}
+	if len(res) == 0 {
+		return InvalidDataError
+	}
+	switch res[0] {
+	case StringLengthValue:
+		return "string"
+	case HashLengthValue:
+		return "hash"
+	case ListLengthValue:
+		return "list"
+	case SetCardValue:
+		return "set"
+	case ZCardValue:
+		return "zset"
+	}
+	panic("unknown type")
 }
 
 func Keys(args [][]byte, wb *levigo.WriteBatch) cmdReply {
