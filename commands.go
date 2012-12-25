@@ -196,3 +196,88 @@ func init() {
 		commands[c.name] = c
 	}
 }
+
+// Keys
+// DUMP
+// KEYS
+// EXISTS
+// EXPIRE
+// EXPIREAT
+// MIGRATE
+// MOVE
+// OBJECT?
+// PERSIST
+// PEXPIRE
+// PEXPIREAT
+// PTTL
+// RANDOMKEY
+// RENAME
+// RENAMENX
+// RESTORE
+// SORT
+// TTL
+// TYPE
+//
+// Lists
+// BLPOP
+// BRPOP
+// BRPOPLPUSH
+// LINDEX
+// LINSERT
+// LLEN
+// LPOP
+// LPUSH
+// LPUSHX
+// LRANGE
+// LREM
+// LSET
+// LTRIM
+// RPOP
+// RPOPLPUSH
+// RPUSH
+// RPUSHX
+//
+// Pub/Sub
+// PSUBSCRIBE
+// PUNSUBSCRIBE
+// UNSUBSCRIBE
+// PUBLISH
+// SUBSCRIBE
+//
+// Transactions
+// DISCARD
+// MULTI
+// EXEC
+// WATCH
+// UNWATCH
+//
+// Scripting
+// EVAL
+// EVALSHA
+// SCRIPT EXISTS
+// SCRIPT KILL
+// SCRIPT FLUSH
+// SCRIPT LOAD
+//
+// Connection
+// AUTH
+// SELECT
+// QUIT
+//
+// Server
+// FLUSHALL
+// FLUSHDB
+// SYNC
+// TIME
+// CONFIG RESETSTAT
+// INFO
+// DBSIZE
+// CLIENT LIST
+// CLIENT KILL
+// MONITOR
+// CONFIG GET
+// CONFIG SET
+// SLAVEOF
+// SHUTDOWN
+// SAVE
+// SLOWLOG
