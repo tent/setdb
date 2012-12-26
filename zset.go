@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -250,7 +251,7 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 	var withscores bool
 	items := end + 1 - start
 	if len(args) >= 4 {
-		if len(args[3]) != 10 || len(args) > 4 { // withscores flag
+		if !bytes.Equal(bytes.ToLower(args[3]), []byte("withscores")) || len(args) > 4 { // withscores flag
 			DB.ReleaseSnapshot(snapshot)
 			opts.Close()
 			return SyntaxError
