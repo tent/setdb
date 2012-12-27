@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math"
 
@@ -80,6 +81,92 @@ func Llen(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 		return err
 	}
 	return l.length
+}
+
+func Linsert(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	mk := metaKey(args[0])
+	l, err := llen(mk, nil)
+	if err != nil {
+		return err
+	}
+	if l.length == 0 {
+		return -1
+	}
+
+	var before bool
+	position := bytes.ToLower(args[1])
+	if bytes.Equal(position, []byte("before")) {
+		before = true
+	} else if !bytes.Equal(position, []byte("after")) {
+		return SyntaxError
+	}
+
+	it := DB.NewIterator(DefaultReadOptions)
+	defer it.Close()
+
+	iterKey := NewKeyBuffer(ListKey, args[0], 0)
+	it.Seek(iterKey.Key())
+	for i := uint32(0); it.Valid() && i < l.length; i++ {
+		k := it.Key()
+		if !iterKey.IsPrefixOf(k) {
+			break
+		}
+
+		// check if this is the pivot value
+		if !bytes.Equal(it.Value(), args[2]) {
+			it.Next()
+		}
+
+		// if we are inserting at index 0 or -1, this can be simplified to a lpush/rpush
+		if (before && i == 0) || (!before && i == l.length-1) {
+			res, err = lpush(args[0], before, false, wb)
+			if err != nil {
+				return err
+			}
+			return res
+		}
+
+		if before {
+			it.Next()
+		} else {
+			it.Prev()
+		}
+		if !it.Valid() {
+			return InvalidDataError
+		}
+		nextKey := it.Key()
+
+		var insertKey []byte
+
+		if before {
+			insertKey = nextKey
+		// if there is already additional sequence bytes at the end, 
+		// we increment or add a new one
+		// lastSeq isn't maxed out, increment the seq byte
+			if len(insertKey) > len(insertKey) && int8(insertKey[len(insertKey)-1]+math.MinInt8) < math.MaxInt8 {
+				insertKey[len(insertKey)-1] += 1
+			} else {
+				insertKey = append(insertKey, 0x80) // 0x80 == 0-math.MinInt8
+			}
+		} else {
+			insertKey = k
+			keyLen := len(iterKey.Key()) + 8
+			// if the next key shares the same initial sequence,
+			// figure out what extra sequence needs to be set to sort before it
+			if len(nextKey) > keyLen && bytes.Equal(k[:keyLen], nextKey[:keyLen] {
+				// if the nextKey has the same amount of sequence bytes, find out if there is room between them
+				if len(k) == len(nextKey) {
+					curSeq := int8(k[len(k)-1]+math.MinInt8)
+					nextSeq := int8(nextKey[len(nextKey)-1]+math.MinInt8)
+					if curSeq > math.MinInt8 && nextSeq - curSeq > 1 {
+						insertKey[len(insertKey)-1] -= 1
+					}
+				}
+			}
+		 }
+		break
+	}
+	return -1
 }
 
 // A LPUSH onto a list takes the seq number of the leftmost element, 
