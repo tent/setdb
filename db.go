@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime"
 
@@ -34,8 +37,12 @@ func maybeFatal(err error) {
 }
 
 func main() {
+	runtime.MemProfileRate = 1
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	openDB()
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	listen()
 }
 

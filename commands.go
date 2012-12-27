@@ -30,6 +30,7 @@ const (
 
 var InvalidKeyTypeError = fmt.Errorf("Operation against a key holding the wrong kind of value")
 var InvalidDataError = fmt.Errorf("Invalid data")
+var InvalidIntError = fmt.Errorf("value is not an integer or out of range")
 var SyntaxError = fmt.Errorf("syntax error")
 
 // A cmdReply is a response to a command, and wraps one of these types:
@@ -83,6 +84,15 @@ var commandList = []cmdDesc{
 	{"hsetnx", Hsetnx, 3, true, 0, 0, 0},
 	{"hvals", Hvals, 1, false, 0, 0, 0},
 	{"keys", Keys, 1, false, -1, 0, 0},
+	{"llen", Llen, 1, false, 0, 0, 0},
+	{"lpush", Lpush, 2, true, 0, 0, 0},
+	{"lpushx", Lpushx, 2, true, 0, 0, 0},
+	{"rpush", Rpush, 2, true, 0, 0, 0},
+	{"rpushx", Rpushx, 2, true, 0, 0, 0},
+	{"lpop", Lpop, 1, true, 0, 0, 0},
+	{"rpop", Rpop, 1, true, 0, 0, 0},
+	{"rpoplpush", Rpoplpush, 2, true, 0, 1, 0},
+	{"lrange", Lrange, 3, false, 0, 0, 0},
 	{"ping", Ping, 0, false, -1, 0, 0},
 	{"set", Set, 2, true, 0, 0, 0},
 	{"sadd", Sadd, -2, true, 0, 0, 0},
@@ -269,6 +279,29 @@ func metaKey(k []byte) []byte {
 	return key
 }
 
+func parseRange(args [][]byte, length int64) (int64, int64, error) {
+	start, err := strconv.ParseInt(string(args[0]), 10, 64)
+	end, err2 := strconv.ParseInt(string(args[1]), 10, 64)
+	if err != nil || err2 != nil {
+		return 0, 0, InvalidIntError
+	}
+
+	// if the index is negative, it is counting from the end,
+	// so add it to the length to get the absolute index
+	if start < 0 {
+		start += length
+	}
+	if end < 0 {
+		end += length
+	}
+
+	if end > length { // limit the end to the last member
+		end = length - 1
+	}
+
+	return start, end, nil
+}
+
 func init() {
 	for _, c := range commandList {
 		commands[c.name] = c
@@ -293,25 +326,6 @@ func init() {
 // SORT
 // TTL
 // TYPE
-//
-// Lists
-// BLPOP
-// BRPOP
-// BRPOPLPUSH
-// LINDEX
-// LINSERT
-// LLEN
-// LPOP
-// LPUSH
-// LPUSHX
-// LRANGE
-// LREM
-// LSET
-// LTRIM
-// RPOP
-// RPOPLPUSH
-// RPUSH
-// RPUSHX
 //
 // Pub/Sub
 // PSUBSCRIBE

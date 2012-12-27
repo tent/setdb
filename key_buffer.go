@@ -9,20 +9,21 @@ const keyPrefixSize = 5
 
 // KeyBuffer is a reusable key for LevelDB
 type KeyBuffer struct {
-	buf    []byte
-	keyLen int
+	buf        []byte
+	keyLen     int
+	reverseKey bool
 }
 
 // Create a new key of type t with key and room for extra bytes.
 func NewKeyBuffer(t byte, key []byte, extra int) *KeyBuffer {
-	k := &KeyBuffer{make([]byte, keyPrefixSize, keyPrefixSize+len(key)+extra), len(key)}
+	k := &KeyBuffer{make([]byte, keyPrefixSize, keyPrefixSize+len(key)+extra), len(key), false}
 	k.buf[0] = t
 	k.SetKey(key)
 	return k
 }
 
 func NewKeyBufferWithSuffix(t byte, key []byte, suffix []byte) *KeyBuffer {
-	k := &KeyBuffer{make([]byte, keyPrefixSize, keyPrefixSize+len(key)+len(suffix)), len(key)}
+	k := &KeyBuffer{make([]byte, keyPrefixSize, keyPrefixSize+len(key)+len(suffix)), len(key), false}
 	k.buf[0] = t
 	k.SetKey(key)
 	k.SetSuffix(suffix)
@@ -56,6 +57,10 @@ func (b *KeyBuffer) SuffixForRead(n int) []byte {
 // Check if k starts with the key (without the suffix)
 func (b *KeyBuffer) IsPrefixOf(k []byte) bool {
 	keyLen := keyPrefixSize + b.keyLen
+	// the last byte is 0xff, so truncate a byte early
+	if b.reverseKey {
+		keyLen--
+	}
 	if len(k) > keyLen && bytes.Equal(b.buf[:keyLen], k[:keyLen]) {
 		return true
 	}
@@ -67,6 +72,7 @@ func (b *KeyBuffer) IsPrefixOf(k []byte) bool {
 // To get a key that will sort *after* given prefix, we increment the last
 // byte that is not 0xff and truncated after the byte that was incremented
 func (b *KeyBuffer) ReverseIterKey() {
+	b.reverseKey = true
 	for i := len(b.buf) - 1; i >= 0; i-- {
 		if b.buf[i] == 0xff {
 			continue

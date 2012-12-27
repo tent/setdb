@@ -221,25 +221,9 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 		return []cmdReply{}
 	}
 
-	start, err := strconv.ParseInt(string(args[1]), 10, 64)
-	end, err2 := strconv.ParseInt(string(args[2]), 10, 64)
-	if err != nil || err2 != nil {
-		DB.ReleaseSnapshot(snapshot)
-		opts.Close()
-		return fmt.Errorf("value is not an integer or out of range")
-	}
-
-	// if the index is negative, it is counting from the end, 
-	// so add it to the length to get the absolute index
-	if start < 0 {
-		start += int64(count)
-	}
-	if end < 0 {
-		end += int64(count)
-	}
-
-	if end > int64(count) { // limit the end to the last member
-		end = int64(count) - 1
+	start, end, err := parseRange(args[1:], int64(count))
+	if err != nil {
+		return err
 	}
 	// the start comes after the end, so we're not going to find anything
 	if start > end {

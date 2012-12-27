@@ -173,12 +173,12 @@ func Hincrby(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	if res != nil {
 		current, err = strconv.ParseInt(string(res), 10, 64)
 		if err != nil {
-			return fmt.Errorf("hash value is not an integer")
+			return InvalidIntError
 		}
 	}
 	increment, err := strconv.ParseInt(string(args[2]), 10, 64)
 	if err != nil {
-		return fmt.Errorf("value is not an integer or out of range")
+		return InvalidIntError
 	}
 	result := []byte(strconv.FormatInt(current+increment, 10))
 	wb.Put(key, result)
