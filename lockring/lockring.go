@@ -10,7 +10,7 @@ type LockRing struct {
 	locks []sync.Mutex
 }
 
-func NewLockRing(n uint32) *LockRing {
+func New(n uint32) *LockRing {
 	return &LockRing{n, make([]sync.Mutex, n)}
 }
 

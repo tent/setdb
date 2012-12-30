@@ -10,7 +10,7 @@ import (
 	"github.com/titanous/setdb/lockring"
 )
 
-var KeyMutex = lockring.NewLockRing(1024)
+var KeyMutex = lockring.New(1024)
 
 // Key/Value type identifiers, only append to this list
 const (
