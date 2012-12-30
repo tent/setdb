@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"sort"
 
 	"github.com/jmhodges/levigo"
 )
@@ -179,24 +181,113 @@ func Smove(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 }
 
 func Sunion(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	union := make(map[string]bool)
+	union := make([]cmdReply, 0)
+	members := make(chan *iterSetMember)
+	go multiSetIter(args, members)
 
-	iterKey := NewKeyBuffer(SetKey, args[0], 0)
-	it := DB.NewIterator(DefaultReadOptions)
-	defer it.Close()
-
-	for _, key := range args {
-		iterKey.SetKey(key)
-		for it.Seek(iterKey.Key()); it.Valid(); it.Next() {
-			k := it.Key()
-			if !iterKey.IsPrefixOf(k) {
-				break
-			}
-			union[string(k[len(iterKey.Key()):])] = true
-		}
+	for m := range members {
+		union = append(union, m.member)
 	}
 
 	return union
+}
+
+type iterSetMember struct {
+	member []byte
+	exists []bool
+}
+
+type setMember struct {
+	member []byte
+	key    int
+}
+
+type setMembers []*setMember
+
+func (m setMembers) Len() int           { return len(m) }
+func (m setMembers) Less(i, j int) bool { return bytes.Compare(m[i].member, m[j].member) == -1 }
+func (m setMembers) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
+
+// Take a list of keys and send a member to out for each unique key with a list
+// of the keys that have that member.
+// An iterator for each key is created (members are lexographically sorted), and
+// the first member from each key is added to a list. This list is sorted, so
+// that the member that would iterate first is at the beginnning of the list.
+// The member list is then checked for any other keys that have the same member.
+// The first member is sent to out, and all keys that had that member are iterated
+// forward. This is repeated until all keys have run out of members.
+func multiSetIter(keys [][]byte, out chan *iterSetMember) {
+	// Set up a snapshot so that we have a consistent view of the data
+	snapshot := DB.NewSnapshot()
+	opts := levigo.NewReadOptions()
+	defer opts.Close()
+	opts.SetSnapshot(snapshot)
+	defer DB.ReleaseSnapshot(snapshot)
+
+	members := make(setMembers, len(keys)) // a list of the current member for each key iterator
+	iterKeys := make([]*KeyBuffer, len(keys))
+	iterators := make([]*levigo.Iterator, len(keys))
+	for i, k := range keys {
+		iterKeys[i] = NewKeyBuffer(SetKey, k, 0)
+		it := DB.NewIterator(opts)
+		defer it.Close()
+		it.Seek(iterKeys[i].Key())
+		iterators[i] = it
+	}
+
+	getMember := func(i int) []byte {
+		// If the iterator is done, we remove the iterator and ignore it in future runs
+		if iterators[i] == nil || !iterators[i].Valid() {
+			iterators[i] = nil
+			return nil
+		}
+		k := iterators[i].Key()
+		if !iterKeys[i].IsPrefixOf(k) {
+			iterators[i] = nil
+			return nil
+		}
+		// Strip the key prefix from the key and return the member
+		return k[len(iterKeys[i].Key()):]
+	}
+
+	// Initialize the members list
+	for i := 0; i < len(members); i++ {
+		members[i] = &setMember{getMember(i), i}
+	}
+
+	// This loop runs until we run out of keys
+	for {
+		im := &iterSetMember{exists: make([]bool, len(members))}
+		first := true
+		sort.Sort(members)
+
+		for _, m := range members {
+			// The member will be nil if the key it is from has no more members
+			if m.member == nil {
+				continue
+			}
+			// The first member is the one that we will send out on this iteration
+			if first {
+				im.member = m.member
+				first = false
+			}
+			if first || bytes.Compare(im.member, m.member) == 0 {
+				im.exists[m.key] = true
+				iterators[m.key].Next()
+				m.member = getMember(m.key)
+			} else {
+				// If the member isn't first or the same as the one we are
+				// looking for, it's not in the list
+				break
+			}
+		}
+		// When the result member is nil, there are no members left in any of the sets
+		if im.member == nil {
+			break
+		}
+		out <- im
+	}
+	close(out)
 }
 
 func DelSet(key []byte, wb *levigo.WriteBatch) {

@@ -90,7 +90,7 @@ var tests = []struct {
 	{"sadd", "aset 1 2 3 4 5", uint32(5)},
 	{"sadd", "set2 1 a 3", uint32(3)},
 	{"sadd", "set3 2 b 4", uint32(3)},
-	{"sunion", "aset set2 set3", map[string]bool{"1": true, "2": true, "3": true, "4": true, "5": true, "a": true, "b": true}},
+	{"sunion", "aset set2 set3", []cmdReply{[]byte("1"), []byte("2"), []byte("3"), []byte("4"), []byte("5"), []byte("a"), []byte("b")}},
 	{"sadd", "aset 1", uint32(0)},
 	{"scard", "aset", uint32(5)},
 	{"sadd", "aset 6", uint32(1)},
