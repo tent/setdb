@@ -180,16 +180,88 @@ func Smove(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return 1
 }
 
-func Sunion(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	union := make([]cmdReply, 0)
-	members := make(chan *iterSetMember)
-	go multiSetIter(args, members)
+const (
+	setUnion int = iota
+	setInter
+	setDiff
+)
 
-	for m := range members {
-		union = append(union, m.member)
+func Sunion(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return combineSet(args, setUnion, nil)
+}
+
+func Sinter(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return combineSet(args, setInter, nil)
+}
+
+func Sdiff(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return combineSet(args, setDiff, nil)
+}
+
+func Sunionstore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return combineSet(args, setUnion, wb)
+}
+
+func Sinterstore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return combineSet(args, setInter, wb)
+}
+
+func Sdiffstore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return combineSet(args, setDiff, wb)
+}
+
+func combineSet(keys [][]byte, op int, wb *levigo.WriteBatch) cmdReply {
+	var count uint32
+	res := make([]cmdReply, 0)
+	members := make(chan *iterSetMember)
+	var storeKey *KeyBuffer
+	var mk []byte
+
+	if wb != nil {
+		mk = metaKey(keys[0])
+		d := Del(keys[0:1], wb)
+		if err, ok := d.(error); ok {
+			return err
+		}
+		storeKey = NewKeyBuffer(SetKey, keys[0], 0)
+		keys = keys[1:]
 	}
 
-	return union
+	go multiSetIter(keys, members, op != setUnion)
+
+COMBINEOUTER:
+	for m := range members {
+		switch op {
+		case setInter:
+			for _, k := range m.exists {
+				if !k {
+					continue COMBINEOUTER
+				}
+			}
+		case setDiff:
+			for i, k := range m.exists {
+				if i == 0 && !k || i > 0 && k {
+					continue COMBINEOUTER
+				}
+			}
+		}
+		if wb != nil {
+			storeKey.SetSuffix(m.member)
+			wb.Put(storeKey.Key(), []byte{})
+			count++
+		} else {
+			res = append(res, m.member)
+		}
+	}
+
+	if wb != nil {
+		if count > 0 {
+			setCard(mk, count, wb)
+		}
+		return count
+	}
+
+	return res
 }
 
 type iterSetMember struct {
@@ -208,7 +280,7 @@ func (m setMembers) Len() int           { return len(m) }
 func (m setMembers) Less(i, j int) bool { return bytes.Compare(m[i].member, m[j].member) == -1 }
 func (m setMembers) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
 
-// Take a list of keys and send a member to out for each unique key with a list
+// Take a list of keys and send a member to out for each unique member with a list
 // of the keys that have that member.
 // An iterator for each key is created (members are lexographically sorted), and
 // the first member from each key is added to a list. This list is sorted, so
@@ -216,7 +288,7 @@ func (m setMembers) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
 // The member list is then checked for any other keys that have the same member.
 // The first member is sent to out, and all keys that had that member are iterated
 // forward. This is repeated until all keys have run out of members.
-func multiSetIter(keys [][]byte, out chan *iterSetMember) {
+func multiSetIter(keys [][]byte, out chan *iterSetMember, stopEarly bool) {
 	// Set up a snapshot so that we have a consistent view of the data
 	snapshot := DB.NewSnapshot()
 	opts := levigo.NewReadOptions()
@@ -256,6 +328,7 @@ func multiSetIter(keys [][]byte, out chan *iterSetMember) {
 	}
 
 	// This loop runs until we run out of keys
+MULTIOUTER:
 	for {
 		im := &iterSetMember{exists: make([]bool, len(members))}
 		first := true
@@ -264,6 +337,9 @@ func multiSetIter(keys [][]byte, out chan *iterSetMember) {
 		for _, m := range members {
 			// The member will be nil if the key it is from has no more members
 			if m.member == nil {
+				if m.key == 0 && stopEarly {
+					break MULTIOUTER
+				}
 				continue
 			}
 			// The first member is the one that we will send out on this iteration
@@ -358,9 +434,4 @@ func parseMemberFromSetKey(key []byte) []byte {
 	return key[5+int(keyLen):]
 }
 
-// SDIFF
-// SDIFFSTORE
-// SINTER
-// SINTERSTORE
 // SRANDMEMBER
-// SUNIONSTORE
