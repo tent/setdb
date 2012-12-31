@@ -83,6 +83,10 @@ func (b *KeyBuffer) ReverseIterKey() {
 	}
 }
 
+func (b *KeyBuffer) Type() byte {
+	return b.buf[0]
+}
+
 func (b *KeyBuffer) Key() []byte {
 	return b.buf
 }

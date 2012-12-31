@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 
 	"github.com/jmhodges/levigo"
@@ -90,12 +91,7 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 
 	// Update the set metadata with the new cardinality
 	if newMembers > 0 {
-		data := make([]byte, 5)
-		data[0] = ZCardValue
-
-		// Increment the cardinality
-		binary.BigEndian.PutUint32(data[1:], card+newMembers)
-		wb.Put(mk, data)
+		setZcard(mk, card+newMembers, wb)
 	}
 
 	if incr { // This is a ZINCRBY, return the new score
@@ -184,15 +180,261 @@ func Zrem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	if deleted == card { // We deleted all of the members, so delete the meta key
 		wb.Delete(mk)
 	} else if deleted > 0 { // Decrement the cardinality
-		data := make([]byte, 5)
-		data[0] = ZCardValue
-
-		// Increment the cardinality
-		binary.BigEndian.PutUint32(data[1:], card-deleted)
-		wb.Put(mk, data)
+		setZcard(mk, card-deleted, wb)
 	}
 
 	return deleted
+}
+
+func Zunionstore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return combineZset(args, zsetUnion, wb)
+}
+
+func Zinterstore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+	return combineZset(args, zsetInter, wb)
+}
+
+const (
+	zsetUnion int = iota
+	zsetInter
+)
+
+const (
+	zsetAggSum int = iota
+	zsetAggMin
+	zsetAggMax
+)
+
+func combineZset(args [][]byte, op int, wb *levigo.WriteBatch) cmdReply {
+	var count uint32
+	res := make([]cmdReply, 0)
+	members := make(chan *iterZsetMember)
+	var setKey, scoreKey *KeyBuffer
+	scoreBytes := make([]byte, 8)
+
+	if wb != nil {
+		d := Del(args[0:1], wb)
+		if err, ok := d.(error); ok {
+			return err
+		}
+		setKey = NewKeyBuffer(ZSetKey, args[0], 0)
+		scoreKey = NewKeyBuffer(ZScoreKey, args[0], 0)
+	}
+
+	numKeys, err := strconv.Atoi(string(args[1]))
+	if err != nil {
+		return InvalidIntError
+	}
+
+	aggregate := zsetAggSum
+	weights := make([]float64, numKeys)
+	scores := make([]float64, 0, numKeys)
+	for i := 0; i < numKeys; i++ {
+		weights[i] = 1
+	}
+
+	argOffset := 2 + numKeys
+	if len(args) > argOffset {
+		if len(args) > argOffset+numKeys {
+			if bytes.Equal(bytes.ToLower(args[argOffset]), []byte("weights")) {
+				argOffset += numKeys + 1
+				for i, w := range args[numKeys+3 : argOffset] {
+					weights[i], err = strconv.ParseFloat(string(w), 64)
+					if err != nil {
+						return fmt.Errorf("weight value is not a float")
+					}
+				}
+			} else {
+				return SyntaxError
+			}
+		}
+		if len(args) > argOffset {
+			if len(args) == argOffset+2 && bytes.Equal(bytes.ToLower(args[argOffset]), []byte("aggregate")) {
+				agg := bytes.ToLower(args[argOffset+1])
+				switch {
+				case bytes.Equal(agg, []byte("sum")):
+					aggregate = zsetAggSum
+				case bytes.Equal(agg, []byte("min")):
+					aggregate = zsetAggMin
+				case bytes.Equal(agg, []byte("max")):
+					aggregate = zsetAggMax
+				default:
+					return SyntaxError
+				}
+			} else {
+				return SyntaxError
+			}
+		}
+	}
+
+	go multiZsetIter(args[2:numKeys+2], members, op != zsetUnion)
+
+COMBINEOUTER:
+	for m := range members {
+		if op == zsetInter {
+			for _, k := range m.exists {
+				if !k {
+					continue COMBINEOUTER
+				}
+			}
+		}
+
+		scores = scores[0:0]
+		for i, k := range m.exists {
+			if k {
+				scores = append(scores, m.scores[i])
+			}
+		}
+		var score float64
+		for i, s := range scores {
+			scores[i] = s * weights[i]
+		}
+		switch aggregate {
+		case zsetAggSum:
+			for _, s := range scores {
+				score += s
+			}
+		case zsetAggMin:
+			sort.Float64s(scores)
+			score = scores[0]
+		case zsetAggMax:
+			sort.Float64s(scores)
+			score = scores[len(scores)-1]
+		}
+
+		if wb != nil {
+			setKey.SetSuffix(m.member)
+			binary.BigEndian.PutUint64(scoreBytes, math.Float64bits(score))
+			setZScoreKeyMember(scoreKey, m.member)
+			setZScoreKeyScore(scoreKey, score)
+			wb.Put(setKey.Key(), scoreBytes)
+			wb.Put(scoreKey.Key(), []byte{})
+			count++
+		} else {
+			res = append(res, m.member, ftoa(score))
+		}
+	}
+
+	if wb != nil {
+		if count > 0 {
+			setZcard(metaKey(args[0]), count, wb)
+		}
+		return count
+	}
+
+	return res
+}
+
+type iterZsetMember struct {
+	member []byte
+	exists []bool
+	scores []float64
+}
+
+type zsetMember struct {
+	member []byte
+	score  float64
+	key    int
+}
+
+type zsetMembers []*zsetMember
+
+func (m zsetMembers) Len() int           { return len(m) }
+func (m zsetMembers) Less(i, j int) bool { return bytes.Compare(m[i].member, m[j].member) == -1 }
+func (m zsetMembers) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
+
+// See set.go's multiSetIter() for details on how this works
+func multiZsetIter(keys [][]byte, out chan *iterZsetMember, stopEarly bool) {
+	defer close(out)
+	snapshot := DB.NewSnapshot()
+	opts := levigo.NewReadOptions()
+	defer opts.Close()
+	opts.SetSnapshot(snapshot)
+	defer DB.ReleaseSnapshot(snapshot)
+
+	members := make(zsetMembers, len(keys))
+	iterKeys := make([]*KeyBuffer, len(keys))
+	iterators := make([]*levigo.Iterator, len(keys))
+	for i, k := range keys {
+		if card, _ := zcard(metaKey(k), opts); card > 0 {
+			iterKeys[i] = NewKeyBuffer(ZSetKey, k, 0)
+		} else {
+			// If the zset is not found, we'll assume that it is actually a set.
+			// There is a slight edge case that an error could be raised by
+			// zcard(), but since this function is run by a goroutine, there
+			// isn't a clean way of handling it.
+			iterKeys[i] = NewKeyBuffer(SetKey, k, 0)
+		}
+		it := DB.NewIterator(opts)
+		defer it.Close()
+		it.Seek(iterKeys[i].Key())
+		iterators[i] = it
+	}
+
+	getMember := func(i int) ([]byte, float64) {
+		// If the iterator is done, we remove the iterator and ignore it in future runs
+		if iterators[i] == nil || !iterators[i].Valid() {
+			iterators[i] = nil
+			return nil, 0
+		}
+		k := iterators[i].Key()
+		if !iterKeys[i].IsPrefixOf(k) {
+			iterators[i] = nil
+			return nil, 0
+		}
+
+		// Default non-sorted set members to score 1.0
+		var score float64 = 1
+		if iterKeys[i].Type() == ZSetKey {
+			score = btof(iterators[i].Value())
+		}
+		// Strip the key prefix from the key and return the member and score
+		return k[len(iterKeys[i].Key()):], score
+	}
+
+	// Initialize the members list
+	for i := 0; i < len(members); i++ {
+		m := &zsetMember{key: i}
+		m.member, m.score = getMember(i)
+		members[i] = m
+	}
+
+MULTIOUTER:
+	for {
+		im := &iterZsetMember{exists: make([]bool, len(members)), scores: make([]float64, len(members))}
+		first := true
+		sort.Sort(members)
+
+		for _, m := range members {
+			// The member will be nil if the key it is from has no more members
+			if m.member == nil {
+				if m.key == 0 && stopEarly {
+					break MULTIOUTER
+				}
+				continue
+			}
+			// The first member is the one that we will send out on this iteration
+			if first {
+				im.member = m.member
+				first = false
+			}
+			if first || bytes.Compare(im.member, m.member) == 0 {
+				im.exists[m.key] = true
+				im.scores[m.key] = m.score
+				iterators[m.key].Next()
+				m.member, m.score = getMember(m.key)
+			} else {
+				// If the member isn't first or the same as the one we are
+				// looking for, it's not in the list
+				break
+			}
+		}
+		// When the result member is nil, there are no members left in any of the sets
+		if im.member == nil {
+			break
+		}
+		out <- im
+	}
 }
 
 func Zrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
@@ -298,6 +540,13 @@ func DelZset(key []byte, wb *levigo.WriteBatch) {
 	}
 }
 
+func setZcard(key []byte, card uint32, wb *levigo.WriteBatch) {
+	data := make([]byte, 5)
+	data[0] = ZCardValue
+	binary.BigEndian.PutUint32(data[1:], card)
+	wb.Put(key, data)
+}
+
 func setZScoreKeyScore(key *KeyBuffer, score float64) {
 	writeByteSortableFloat(key.SuffixForRead(8), score)
 }
@@ -361,9 +610,28 @@ func readByteSortableFloat(b []byte) float64 {
 	return -math.Float64frombits(binary.BigEndian.Uint64(b))
 }
 
+func ZunionInterKeys(args [][]byte) [][]byte {
+	numKeys, err := strconv.Atoi(string(args[1]))
+	// don't return any keys if the response will be a syntax error
+	if err != nil || len(args) < 2+numKeys {
+		return nil
+	}
+	keys := make([][]byte, 1, 1+numKeys)
+	keys[0] = args[0]
+KEYLOOP:
+	for _, k := range args[2 : 2+numKeys] {
+		for _, key := range keys {
+			// skip keys that are already in the array
+			if bytes.Equal(k, key) {
+				continue KEYLOOP
+			}
+		}
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // ZCOUNT
-// ZINTERSTORE
-// ZUNIONSTORE
 // ZREVRANGEBYSCORE
 // ZRANGEBYSCORE
 // ZRANK

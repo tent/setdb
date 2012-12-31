@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -56,71 +57,78 @@ type cmdReplyStream struct {
 type cmdFunc func(args [][]byte, wb *levigo.WriteBatch) cmdReply
 
 type cmdDesc struct {
-	name     string
-	function cmdFunc
-	arity    int  // the number of required arguments, -n means >= n
-	writes   bool // false if the command doesn't write data (the WriteBatch will not be passed in)
-	firstKey int  // first argument that is a key (-1 for none)
-	lastKey  int  // last argument that is a key (-1 for unbounded)
-	keyStep  int  // step to get all the keys from first to last. For instance MSET is 2 since the arguments are KEY VAL KEY VAL...
+	name      string
+	function  cmdFunc
+	arity     int                     // the number of required arguments, -n means >= n
+	writes    bool                    // false if the command doesn't write data (the WriteBatch will not be passed in)
+	firstKey  int                     // first argument that is a key (-1 for none)
+	lastKey   int                     // last argument that is a key (-1 for unbounded)
+	keyStep   int                     // step to get all the keys from first to last. For instance MSET is 2 since the arguments are KEY VAL KEY VAL...
+	keyLookup func([][]byte) [][]byte // function that extracts the keys from the args
 }
 
 var commandList = []cmdDesc{
-	{"del", Del, -1, true, 0, -1, 1},
-	{"echo", Echo, 1, false, -1, 0, 0},
-	{"exists", Exists, 1, false, 0, 0, 0},
-	{"get", Get, 1, false, 0, 0, 0},
-	{"hdel", Hdel, -2, true, 0, 0, 0},
-	{"hexists", Hexists, 2, false, 0, 0, 0},
-	{"hget", Hget, 2, false, 0, 0, 0},
-	{"hgetall", Hgetall, 1, false, 0, 0, 0},
-	{"hincrby", Hincrby, 3, true, 0, 0, 0},
-	{"hincrbyfloat", Hincrbyfloat, 3, true, 0, 0, 0},
-	{"hkeys", Hkeys, 1, false, 0, 0, 0},
-	{"hlen", Hlen, 1, false, 0, 0, 0},
-	{"hmget", Hmget, -2, false, 0, 0, 0},
-	{"hmset", Hmset, -3, true, 0, 0, 0},
-	{"hset", Hset, 3, true, 0, 0, 0},
-	{"hsetnx", Hsetnx, 3, true, 0, 0, 0},
-	{"hvals", Hvals, 1, false, 0, 0, 0},
-	{"keys", Keys, 1, false, -1, 0, 0},
-	{"llen", Llen, 1, false, 0, 0, 0},
-	{"lpush", Lpush, 2, true, 0, 0, 0},
-	{"lpushx", Lpushx, 2, true, 0, 0, 0},
-	{"rpush", Rpush, 2, true, 0, 0, 0},
-	{"rpushx", Rpushx, 2, true, 0, 0, 0},
-	{"lpop", Lpop, 1, true, 0, 0, 0},
-	{"rpop", Rpop, 1, true, 0, 0, 0},
-	{"rpoplpush", Rpoplpush, 2, true, 0, 1, 0},
-	{"lrange", Lrange, 3, false, 0, 0, 0},
-	{"ping", Ping, 0, false, -1, 0, 0},
-	{"set", Set, 2, true, 0, 0, 0},
-	{"sadd", Sadd, -2, true, 0, 0, 0},
-	{"scard", Scard, 1, false, 0, 0, 0},
-	{"sismember", Sismember, 2, false, 0, 0, 0},
-	{"smembers", Smembers, 1, false, 0, 0, 0},
-	{"smove", Smove, 3, true, 0, 1, 0},
-	{"spop", Spop, 1, true, 0, 0, 0},
-	{"srem", Srem, -2, true, 0, 0, 0},
-	{"sunion", Sunion, -1, false, 0, -1, 1},
-	{"sunionstore", Sunionstore, -2, true, 0, -1, 1},
-	{"sinter", Sinter, -1, false, 0, -1, 1},
-	{"sinterstore", Sinterstore, -2, true, 0, -1, 1},
-	{"sdiff", Sdiff, -1, false, 0, -1, 1},
-	{"sdiffstore", Sdiffstore, -2, true, 0, -1, 1},
-	{"time", Time, 0, false, -1, 0, 0},
-	{"type", Type, 1, false, 0, 0, 0},
-	{"zadd", Zadd, -3, true, 0, 0, 0},
-	{"zcard", Zcard, 1, false, 0, 0, 0},
-	{"zincrby", Zincrby, 3, true, 0, 0, 0},
-	{"zrange", Zrange, -3, false, 0, 0, 0},
-	{"zrem", Zrem, -2, true, 0, 0, 0},
-	{"zrevrange", Zrevrange, -3, false, 0, 0, 0},
-	{"zscore", Zscore, 2, false, 0, 0, 0},
+	{"del", Del, -1, true, 0, -1, 1, nil},
+	{"echo", Echo, 1, false, -1, 0, 0, nil},
+	{"exists", Exists, 1, false, 0, 0, 0, nil},
+	{"get", Get, 1, false, 0, 0, 0, nil},
+	{"hdel", Hdel, -2, true, 0, 0, 0, nil},
+	{"hexists", Hexists, 2, false, 0, 0, 0, nil},
+	{"hget", Hget, 2, false, 0, 0, 0, nil},
+	{"hgetall", Hgetall, 1, false, 0, 0, 0, nil},
+	{"hincrby", Hincrby, 3, true, 0, 0, 0, nil},
+	{"hincrbyfloat", Hincrbyfloat, 3, true, 0, 0, 0, nil},
+	{"hkeys", Hkeys, 1, false, 0, 0, 0, nil},
+	{"hlen", Hlen, 1, false, 0, 0, 0, nil},
+	{"hmget", Hmget, -2, false, 0, 0, 0, nil},
+	{"hmset", Hmset, -3, true, 0, 0, 0, nil},
+	{"hset", Hset, 3, true, 0, 0, 0, nil},
+	{"hsetnx", Hsetnx, 3, true, 0, 0, 0, nil},
+	{"hvals", Hvals, 1, false, 0, 0, 0, nil},
+	{"keys", Keys, 1, false, -1, 0, 0, nil},
+	{"llen", Llen, 1, false, 0, 0, 0, nil},
+	{"lpush", Lpush, 2, true, 0, 0, 0, nil},
+	{"lpushx", Lpushx, 2, true, 0, 0, 0, nil},
+	{"rpush", Rpush, 2, true, 0, 0, 0, nil},
+	{"rpushx", Rpushx, 2, true, 0, 0, 0, nil},
+	{"lpop", Lpop, 1, true, 0, 0, 0, nil},
+	{"rpop", Rpop, 1, true, 0, 0, 0, nil},
+	{"rpoplpush", Rpoplpush, 2, true, 0, 1, 0, nil},
+	{"lrange", Lrange, 3, false, 0, 0, 0, nil},
+	{"ping", Ping, 0, false, -1, 0, 0, nil},
+	{"set", Set, 2, true, 0, 0, 0, nil},
+	{"sadd", Sadd, -2, true, 0, 0, 0, nil},
+	{"scard", Scard, 1, false, 0, 0, 0, nil},
+	{"sismember", Sismember, 2, false, 0, 0, 0, nil},
+	{"smembers", Smembers, 1, false, 0, 0, 0, nil},
+	{"smove", Smove, 3, true, 0, 1, 0, nil},
+	{"spop", Spop, 1, true, 0, 0, 0, nil},
+	{"srem", Srem, -2, true, 0, 0, 0, nil},
+	{"sunion", Sunion, -1, false, 0, -1, 1, nil},
+	{"sunionstore", Sunionstore, -2, true, 0, -1, 1, nil},
+	{"sinter", Sinter, -1, false, 0, -1, 1, nil},
+	{"sinterstore", Sinterstore, -2, true, 0, -1, 1, nil},
+	{"sdiff", Sdiff, -1, false, 0, -1, 1, nil},
+	{"sdiffstore", Sdiffstore, -2, true, 0, -1, 1, nil},
+	{"time", Time, 0, false, -1, 0, 0, nil},
+	{"type", Type, 1, false, 0, 0, 0, nil},
+	{"zadd", Zadd, -3, true, 0, 0, 0, nil},
+	{"zcard", Zcard, 1, false, 0, 0, 0, nil},
+	{"zincrby", Zincrby, 3, true, 0, 0, 0, nil},
+	{"zrange", Zrange, -3, false, 0, 0, 0, nil},
+	{"zrem", Zrem, -2, true, 0, 0, 0, nil},
+	{"zrevrange", Zrevrange, -3, false, 0, 0, 0, nil},
+	{"zscore", Zscore, 2, false, 0, 0, 0, nil},
+	{"zunionstore", Zunionstore, -3, true, 0, 0, 0, ZunionInterKeys},
+	{"zinterstore", Zinterstore, -3, true, 0, 0, 0, ZunionInterKeys},
 }
 
 // extract the keys from the command args
 func (c *cmdDesc) getKeys(args [][]byte) [][]byte {
+	// if a key lookup function was specified, use it
+	if c.keyLookup != nil {
+		return c.keyLookup(args)
+	}
 	// if no keys are expected, or the argument with the first key doesn't exist
 	if c.firstKey < 0 || len(args) <= c.firstKey {
 		return nil
