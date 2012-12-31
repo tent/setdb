@@ -130,7 +130,14 @@ func (c *cmdDesc) getKeys(args [][]byte) [][]byte {
 		return args[c.firstKey : c.lastKey+1]
 	}
 	keys := make([][]byte, 0, 1)
+KEYLOOP:
 	for i := c.firstKey; i < len(args) && (c.lastKey == -1 || i <= c.lastKey); i += c.keyStep {
+		for _, k := range keys {
+			// skip keys that are already in the array
+			if bytes.Equal(k, args[i]) {
+				continue KEYLOOP
+			}
+		}
 		keys = append(keys, args[i])
 	}
 	return keys
