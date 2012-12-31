@@ -34,27 +34,25 @@ var InvalidDataError = fmt.Errorf("Invalid data")
 var InvalidIntError = fmt.Errorf("value is not an integer or out of range")
 var SyntaxError = fmt.Errorf("syntax error")
 
-// A cmdReply is a response to a command, and wraps one of these types:
+// if the number of items is known before the items,
+// they do not need to be buffered into memory, and can be streamed over a channel
+type cmdReplyStream struct {
+	size  int64            // the number of items that will be sent
+	items chan interface{} // a multi-bulk reply item, one of nil, []byte, or int
+}
+
+// cmdFunc response to Redis protocol conversion:
 //
 // string - single line reply, automatically prefixed with "+"
 // error - error message, automatically prefixed with "-"
 // int - integer number, automatically encoded and prefixed with ":"
 // []byte - bulk reply, automatically prefixed with the length like "$3\r\n"
 // nil, nil []byte - nil response, encoded as "$-1\r\n"
-// []cmdReply - multi-bulk reply, automatically serialized, members can be nil, []byte, or int
-// nil []cmdReply - nil multi-bulk reply, serialized as "*-1\r\n"
+// []interface{} - multi-bulk reply, automatically serialized, members can be nil, []byte, or int
+// nil []interface{} - nil multi-bulk reply, serialized as "*-1\r\n"
 // map[string]bool - multi-bulk reply (used by SUNION)
 // *cmdReplyStream - multi-bulk reply sent over a channel
-type cmdReply interface{}
-
-// if the number of items is known before the items,
-// they do not need to be buffered into memory, and can be streamed over a channel
-type cmdReplyStream struct {
-	size  int64         // the number of items that will be sent
-	items chan cmdReply // a multi-bulk reply item, one of nil, []byte, or int
-}
-
-type cmdFunc func(args [][]byte, wb *levigo.WriteBatch) cmdReply
+type cmdFunc func(args [][]byte, wb *levigo.WriteBatch) interface{}
 
 type cmdDesc struct {
 	name      string
@@ -172,22 +170,22 @@ func (c *cmdDesc) unlockKeys(args [][]byte) {
 
 var commands = make(map[string]cmdDesc, len(commandList))
 
-func Ping(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Ping(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return "PONG"
 }
 
-func Echo(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Echo(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return args[0]
 }
 
-func Time(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Time(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	now := time.Now()
 	secs := strconv.FormatInt(now.Unix(), 10)
 	micros := strconv.Itoa(now.Nanosecond() / 1000)
-	return []cmdReply{[]byte(secs), []byte(micros)}
+	return []interface{}{[]byte(secs), []byte(micros)}
 }
 
-func Exists(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Exists(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := DB.Get(DefaultReadOptions, metaKey(args[0]))
 	if err != nil {
 		return err
@@ -198,7 +196,7 @@ func Exists(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return 1
 }
 
-func Type(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Type(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := DB.Get(DefaultReadOptions, metaKey(args[0]))
 	if err != nil {
 		return err
@@ -224,10 +222,10 @@ func Type(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	panic("unknown type")
 }
 
-func Keys(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Keys(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	it := DB.NewIterator(ReadWithoutCacheFill)
 	defer it.Close()
-	keys := make([]cmdReply, 0)
+	keys := make([]interface{}, 0)
 	pattern := string(args[0])
 
 	for it.Seek([]byte{MetaKey}); it.Valid(); it.Next() {
@@ -248,7 +246,7 @@ func Keys(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return keys
 }
 
-func Del(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Del(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	deleted := 0
 	k := make([]byte, 1, len(args[0])) // make a reusable slice with room for the first metakey
 

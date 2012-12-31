@@ -25,7 +25,7 @@ const (
 	listLooseSeq byte = 1 << iota
 )
 
-func Lrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Lrange(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	snapshot := DB.NewSnapshot()
 	opts := levigo.NewReadOptions()
 	opts.SetSnapshot(snapshot)
@@ -39,7 +39,7 @@ func Lrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	if l.length == 0 {
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
-		return []cmdReply{}
+		return []interface{}{}
 	}
 
 	start, end, err := parseRange(args[1:], int64(l.length))
@@ -50,11 +50,11 @@ func Lrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	if start > end {
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
-		return []cmdReply{}
+		return []interface{}{}
 	}
 
 	count := end + 1 - start
-	stream := &cmdReplyStream{count, make(chan cmdReply)}
+	stream := &cmdReplyStream{count, make(chan interface{})}
 
 	go func() {
 		defer close(stream.items)
@@ -74,7 +74,7 @@ func Lrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return stream
 }
 
-func Llen(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Llen(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	l, err := llen(metaKey(args[0]), nil)
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func Llen(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 
 // A LPUSH onto a list takes the seq number of the leftmost element, 
 // decrements it and inserts the item.
-func Lpush(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Lpush(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := lpush(args, true, true, wb)
 	if err != nil {
 		return err
@@ -92,7 +92,7 @@ func Lpush(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return res
 }
 
-func Lpushx(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Lpushx(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := lpush(args, true, false, wb)
 	if err != nil {
 		return err
@@ -100,7 +100,7 @@ func Lpushx(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return res
 }
 
-func Rpush(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Rpush(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := lpush(args, false, true, wb)
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func Rpush(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return res
 }
 
-func Rpushx(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Rpushx(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := lpush(args, false, false, wb)
 	if err != nil {
 		return err
@@ -116,7 +116,7 @@ func Rpushx(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return res
 }
 
-func lpush(args [][]byte, left bool, create bool, wb *levigo.WriteBatch) (cmdReply, error) {
+func lpush(args [][]byte, left bool, create bool, wb *levigo.WriteBatch) (interface{}, error) {
 	mk := metaKey(args[0])
 	l, err := llen(mk, nil)
 	if err != nil {
@@ -144,7 +144,7 @@ func lpush(args [][]byte, left bool, create bool, wb *levigo.WriteBatch) (cmdRep
 	return l.length, nil
 }
 
-func Lpop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Lpop(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := lpop(args[0], true, wb)
 	if err != nil {
 		return err
@@ -152,7 +152,7 @@ func Lpop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return res
 }
 
-func Rpop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Rpop(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := lpop(args[0], false, wb)
 	if err != nil {
 		return err
@@ -160,7 +160,7 @@ func Rpop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return res
 }
 
-func Rpoplpush(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Rpoplpush(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := lpop(args[0], false, wb)
 	if err != nil {
 		return err
@@ -175,7 +175,7 @@ func Rpoplpush(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return res
 }
 
-func lpop(key []byte, left bool, wb *levigo.WriteBatch) (cmdReply, error) {
+func lpop(key []byte, left bool, wb *levigo.WriteBatch) (interface{}, error) {
 	mk := metaKey(key)
 	l, err := llen(mk, nil)
 	if err != nil {

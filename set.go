@@ -16,7 +16,7 @@ import (
 // For each member:
 // SetKey | key length uint32 | key | member = empty
 
-func Sadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Sadd(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	var newMembers uint32
 	key := NewKeyBuffer(SetKey, args[0], len(args[1]))
 	mk := metaKey(args[0])
@@ -45,7 +45,7 @@ func Sadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return newMembers
 }
 
-func Scard(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Scard(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	card, err := scard(metaKey(args[0]), nil)
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func Scard(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return card
 }
 
-func Srem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Srem(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	mk := metaKey(args[0])
 	card, err := scard(mk, nil)
 	if err != nil {
@@ -84,7 +84,7 @@ func Srem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return deleted
 }
 
-func Sismember(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Sismember(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := DB.Get(DefaultReadOptions, NewKeyBufferWithSuffix(SetKey, args[0], args[1]).Key())
 	if err != nil {
 		return err
@@ -95,7 +95,7 @@ func Sismember(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return 1
 }
 
-func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Smembers(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	// use a snapshot so that the cardinality is consistent with the iterator
 	snapshot := DB.NewSnapshot()
 	opts := levigo.NewReadOptions()
@@ -108,13 +108,13 @@ func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 		opts.Close()
 	}
 	if card == 0 {
-		return []cmdReply{}
+		return []interface{}{}
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
 	}
 
 	// send the reply back over a channel since there could be a lot of items
-	stream := &cmdReplyStream{int64(card), make(chan cmdReply)}
+	stream := &cmdReplyStream{int64(card), make(chan interface{})}
 	go func() {
 		defer close(stream.items)
 		it := DB.NewIterator(opts)
@@ -136,7 +136,7 @@ func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return stream
 }
 
-func Spop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Spop(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	mk := metaKey(args[0])
 	card, err := scard(mk, nil)
 	if err != nil {
@@ -160,7 +160,7 @@ func Spop(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return member
 }
 
-func Smove(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Smove(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	resp, err := DB.Get(DefaultReadOptions, NewKeyBufferWithSuffix(SetKey, args[0], args[2]).Key())
 	if err != nil {
 		return err
@@ -186,33 +186,33 @@ const (
 	setDiff
 )
 
-func Sunion(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Sunion(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return combineSet(args, setUnion, nil)
 }
 
-func Sinter(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Sinter(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return combineSet(args, setInter, nil)
 }
 
-func Sdiff(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Sdiff(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return combineSet(args, setDiff, nil)
 }
 
-func Sunionstore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Sunionstore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return combineSet(args, setUnion, wb)
 }
 
-func Sinterstore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Sinterstore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return combineSet(args, setInter, wb)
 }
 
-func Sdiffstore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Sdiffstore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return combineSet(args, setDiff, wb)
 }
 
-func combineSet(keys [][]byte, op int, wb *levigo.WriteBatch) cmdReply {
+func combineSet(keys [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 	var count uint32
-	res := make([]cmdReply, 0)
+	res := make([]interface{}, 0)
 	members := make(chan *iterSetMember)
 	var storeKey *KeyBuffer
 	var mk []byte

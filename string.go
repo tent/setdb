@@ -13,7 +13,7 @@ import (
 // For each key:
 // StringKey | key = value
 
-func Set(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Set(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	key := metaKey(args[0])
 	res, err := DB.Get(DefaultReadOptions, key)
 	if err != nil {
@@ -39,7 +39,7 @@ func Set(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return "OK"
 }
 
-func Get(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Get(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := DB.Get(DefaultReadOptions, stringKey(args[0]))
 	if err != nil {
 		return err

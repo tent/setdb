@@ -19,18 +19,18 @@ import (
 // ZSetKey   | key length uint32 | key | member = score float64
 // ZScoreKey | key length uint32 | key | score float64 | member = empty
 
-func Zadd(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zadd(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	if (len(args)-1)%2 != 0 {
 		return fmt.Errorf("wrong number of arguments for 'zadd' command")
 	}
 	return zadd(args, wb, false)
 }
 
-func Zincrby(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zincrby(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return zadd(args, wb, true)
 }
 
-func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
+func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) interface{} {
 	var newMembers uint32
 	var score float64
 	scoreBytes := make([]byte, 8)
@@ -100,7 +100,7 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) cmdReply {
 	return newMembers
 }
 
-func Zscore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zscore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := DB.Get(DefaultReadOptions, NewKeyBufferWithSuffix(ZSetKey, args[0], args[1]).Key())
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func Zscore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return ftoa(btof(res))
 }
 
-func Zcard(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zcard(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	c, err := zcard(metaKey(args[0]), nil)
 	if err != nil {
 		return err
@@ -143,7 +143,7 @@ func zcard(key []byte, opts *levigo.ReadOptions) (uint32, error) {
 	return binary.BigEndian.Uint32(res[1:]), nil
 }
 
-func Zrem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zrem(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	mk := metaKey(args[0])
 	card, err := zcard(mk, nil)
 	if err != nil {
@@ -186,11 +186,11 @@ func Zrem(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return deleted
 }
 
-func Zunionstore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zunionstore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return combineZset(args, zsetUnion, wb)
 }
 
-func Zinterstore(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zinterstore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return combineZset(args, zsetInter, wb)
 }
 
@@ -205,9 +205,9 @@ const (
 	zsetAggMax
 )
 
-func combineZset(args [][]byte, op int, wb *levigo.WriteBatch) cmdReply {
+func combineZset(args [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 	var count uint32
-	res := make([]cmdReply, 0)
+	res := make([]interface{}, 0)
 	members := make(chan *iterZsetMember)
 	var setKey, scoreKey *KeyBuffer
 	scoreBytes := make([]byte, 8)
@@ -437,15 +437,15 @@ MULTIOUTER:
 	}
 }
 
-func Zrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zrange(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return zrange(args, false)
 }
 
-func Zrevrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Zrevrange(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return zrange(args, true)
 }
 
-func zrange(args [][]byte, reverse bool) cmdReply {
+func zrange(args [][]byte, reverse bool) interface{} {
 	// use a snapshot for this read so that the zcard is consistent
 	snapshot := DB.NewSnapshot()
 	opts := levigo.NewReadOptions()
@@ -460,7 +460,7 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 	if count == 0 {
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
-		return []cmdReply{}
+		return []interface{}{}
 	}
 
 	start, end, err := parseRange(args[1:], int64(count))
@@ -471,7 +471,7 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 	if start > end {
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
-		return []cmdReply{}
+		return []interface{}{}
 	}
 
 	var withscores bool
@@ -485,7 +485,7 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 		withscores = true
 		items *= 2
 	}
-	stream := &cmdReplyStream{items, make(chan cmdReply)}
+	stream := &cmdReplyStream{items, make(chan interface{})}
 
 	go func() {
 		defer close(stream.items)

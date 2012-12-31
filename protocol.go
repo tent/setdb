@@ -159,8 +159,8 @@ func handleClient(client net.Conn) {
 	}
 }
 
-func writeReply(w io.Writer, reply cmdReply) (err error) {
-	if _, ok := reply.([]cmdReply); !ok && reply == nil {
+func writeReply(w io.Writer, reply interface{}) (err error) {
+	if _, ok := reply.([]interface{}); !ok && reply == nil {
 		return writeNil(w)
 	}
 	switch reply.(type) {
@@ -176,8 +176,8 @@ func writeReply(w io.Writer, reply cmdReply) (err error) {
 		err = writeInt(w, int64(reply.(uint32)))
 	case error:
 		err = writeError(w, reply.(error).Error())
-	case []cmdReply:
-		err = writeMultibulk(w, reply.([]cmdReply))
+	case []interface{}:
+		err = writeMultibulk(w, reply.([]interface{}))
 	case *cmdReplyStream:
 		err = writeMultibulkStream(w, reply.(*cmdReplyStream))
 	case map[string]bool:
@@ -235,7 +235,7 @@ func writeMultibulkStream(w io.Writer, reply *cmdReplyStream) error {
 	return nil
 }
 
-func writeMultibulk(w io.Writer, reply []cmdReply) error {
+func writeMultibulk(w io.Writer, reply []interface{}) error {
 	if reply == nil {
 		err := writeMultibulkLength(w, -1)
 		return err

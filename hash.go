@@ -15,15 +15,15 @@ import (
 // For each field:
 // HashKey | key length uint32 | key | field = value
 
-func Hset(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hset(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return hset(args, true, wb)
 }
 
-func Hsetnx(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hsetnx(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return hset(args, false, wb)
 }
 
-func hset(args [][]byte, overwrite bool, wb *levigo.WriteBatch) cmdReply {
+func hset(args [][]byte, overwrite bool, wb *levigo.WriteBatch) interface{} {
 	mk := metaKey(args[0])
 	length, err := hlen(mk, nil)
 	if err != nil {
@@ -47,7 +47,7 @@ func hset(args [][]byte, overwrite bool, wb *levigo.WriteBatch) cmdReply {
 	return 0
 }
 
-func Hget(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hget(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := DB.Get(DefaultReadOptions, NewKeyBufferWithSuffix(HashKey, args[0], args[1]).Key())
 	if err != nil {
 		return err
@@ -55,7 +55,7 @@ func Hget(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return res
 }
 
-func Hexists(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hexists(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := DB.Get(DefaultReadOptions, NewKeyBufferWithSuffix(HashKey, args[0], args[1]).Key())
 	if err != nil {
 		return err
@@ -66,7 +66,7 @@ func Hexists(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return 1
 }
 
-func Hlen(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hlen(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	length, err := hlen(metaKey(args[0]), nil)
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func Hlen(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return length
 }
 
-func Hdel(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hdel(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	mk := metaKey(args[0])
 	length, err := hlen(mk, nil)
 	if err != nil {
@@ -106,7 +106,7 @@ func Hdel(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return deleted
 }
 
-func Hmset(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hmset(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	if (len(args)-1)%2 != 0 {
 		return fmt.Errorf("wrong number of arguments for 'hmset' command")
 	}
@@ -139,8 +139,8 @@ func Hmset(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return "OK"
 }
 
-func Hmget(args [][]byte, wb *levigo.WriteBatch) cmdReply {
-	stream := &cmdReplyStream{int64(len(args) - 1), make(chan cmdReply)}
+func Hmget(args [][]byte, wb *levigo.WriteBatch) interface{} {
+	stream := &cmdReplyStream{int64(len(args) - 1), make(chan interface{})}
 	go func() {
 		defer close(stream.items)
 		key := NewKeyBuffer(HashKey, args[0], len(args[1]))
@@ -157,7 +157,7 @@ func Hmget(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return stream
 }
 
-func Hincrby(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hincrby(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	mk := metaKey(args[0])
 	length, err := hlen(mk, nil)
 	if err != nil {
@@ -190,7 +190,7 @@ func Hincrby(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return result
 }
 
-func Hincrbyfloat(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hincrbyfloat(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	mk := metaKey(args[0])
 	length, err := hlen(mk, nil)
 	if err != nil {
@@ -223,19 +223,19 @@ func Hincrbyfloat(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	return result
 }
 
-func Hgetall(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hgetall(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return hgetall(args[0], true, true)
 }
 
-func Hkeys(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hkeys(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return hgetall(args[0], true, false)
 }
 
-func Hvals(args [][]byte, wb *levigo.WriteBatch) cmdReply {
+func Hvals(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return hgetall(args[0], false, true)
 }
 
-func hgetall(key []byte, fields bool, values bool) cmdReply {
+func hgetall(key []byte, fields bool, values bool) interface{} {
 	// use a snapshot so that the length is consistent with the iterator
 	snapshot := DB.NewSnapshot()
 	opts := levigo.NewReadOptions()
@@ -248,7 +248,7 @@ func hgetall(key []byte, fields bool, values bool) cmdReply {
 		opts.Close()
 	}
 	if length == 0 {
-		return []cmdReply{}
+		return []interface{}{}
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
 	}
@@ -257,7 +257,7 @@ func hgetall(key []byte, fields bool, values bool) cmdReply {
 		length *= 2
 	}
 
-	stream := &cmdReplyStream{int64(length), make(chan cmdReply)}
+	stream := &cmdReplyStream{int64(length), make(chan interface{})}
 	go func() {
 		defer close(stream.items)
 		iterKey := NewKeyBuffer(HashKey, key, 0)
