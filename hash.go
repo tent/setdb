@@ -142,6 +142,7 @@ func Hmset(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 func Hmget(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	stream := &cmdReplyStream{int64(len(args) - 1), make(chan cmdReply)}
 	go func() {
+		defer close(stream.items)
 		key := NewKeyBuffer(HashKey, args[0], len(args[1]))
 		for _, field := range args[1:] {
 			key.SetSuffix(field)
@@ -152,7 +153,6 @@ func Hmget(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 			}
 			stream.items <- res
 		}
-		close(stream.items)
 	}()
 	return stream
 }
@@ -259,6 +259,7 @@ func hgetall(key []byte, fields bool, values bool) cmdReply {
 
 	stream := &cmdReplyStream{int64(length), make(chan cmdReply)}
 	go func() {
+		defer close(stream.items)
 		iterKey := NewKeyBuffer(HashKey, key, 0)
 		it := DB.NewIterator(opts)
 		for it.Seek(iterKey.Key()); it.Valid(); it.Next() {
@@ -273,7 +274,6 @@ func hgetall(key []byte, fields bool, values bool) cmdReply {
 				stream.items <- it.Value()
 			}
 		}
-		close(stream.items)
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
 	}()

@@ -116,6 +116,7 @@ func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	// send the reply back over a channel since there could be a lot of items
 	stream := &cmdReplyStream{int64(card), make(chan cmdReply)}
 	go func() {
+		defer close(stream.items)
 		it := DB.NewIterator(opts)
 		defer it.Close()
 		iterKey := NewKeyBuffer(SetKey, args[0], 0)
@@ -129,7 +130,6 @@ func Smembers(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 			}
 			stream.items <- parseMemberFromSetKey(key)
 		}
-		close(stream.items)
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
 	}()
@@ -289,6 +289,7 @@ func (m setMembers) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
 // The first member is sent to out, and all keys that had that member are iterated
 // forward. This is repeated until all keys have run out of members.
 func multiSetIter(keys [][]byte, out chan *iterSetMember, stopEarly bool) {
+	defer close(out)
 	// Set up a snapshot so that we have a consistent view of the data
 	snapshot := DB.NewSnapshot()
 	opts := levigo.NewReadOptions()
@@ -363,7 +364,6 @@ MULTIOUTER:
 		}
 		out <- im
 	}
-	close(out)
 }
 
 func DelSet(key []byte, wb *levigo.WriteBatch) {

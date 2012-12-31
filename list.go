@@ -57,6 +57,7 @@ func Lrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 	stream := &cmdReplyStream{count, make(chan cmdReply)}
 
 	go func() {
+		defer close(stream.items)
 		it := DB.NewIterator(opts)
 		defer it.Close()
 
@@ -67,7 +68,6 @@ func Lrange(args [][]byte, wb *levigo.WriteBatch) cmdReply {
 			stream.items <- it.Value()
 			it.Next()
 		}
-		close(stream.items)
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
 	}()

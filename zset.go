@@ -246,6 +246,7 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 	stream := &cmdReplyStream{items, make(chan cmdReply)}
 
 	go func() {
+		defer close(stream.items)
 		it := DB.NewIterator(opts)
 		defer it.Close()
 
@@ -269,7 +270,6 @@ func zrange(args [][]byte, reverse bool) cmdReply {
 				it.Next()
 			}
 		}
-		close(stream.items)
 		DB.ReleaseSnapshot(snapshot)
 		opts.Close()
 	}()
