@@ -279,7 +279,7 @@ combine:
 			}
 		}
 
-		scores = scores[0:0]
+		scores = scores[:0]
 		for i, k := range m.exists {
 			if k {
 				scores = append(scores, m.scores[i])

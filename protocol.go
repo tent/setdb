@@ -187,7 +187,7 @@ func protocolHandler(c *client) {
 		}
 
 		// Truncate arguments for the next run
-		args = args[0:0]
+		args = args[:0]
 	}
 }
 
