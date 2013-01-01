@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/jmhodges/levigo"
@@ -97,7 +96,7 @@ func protocolHandler(c *client) {
 		}
 
 		// lookup the command
-		command, ok := commands[strings.ToLower(string(args[0]))]
+		command, ok := commands[string(bytes.ToLower(args[0]))]
 		if !ok {
 			writeError(c.w, "unknown command '"+string(args[0])+"'")
 			return
