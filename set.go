@@ -229,19 +229,19 @@ func combineSet(keys [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 
 	go multiSetIter(keys, members, op != setUnion)
 
-COMBINEOUTER:
+combine:
 	for m := range members {
 		switch op {
 		case setInter:
 			for _, k := range m.exists {
 				if !k {
-					continue COMBINEOUTER
+					continue combine
 				}
 			}
 		case setDiff:
 			for i, k := range m.exists {
 				if i == 0 && !k || i > 0 && k {
-					continue COMBINEOUTER
+					continue combine
 				}
 			}
 		}
@@ -329,7 +329,7 @@ func multiSetIter(keys [][]byte, out chan<- *iterSetMember, stopEarly bool) {
 	}
 
 	// This loop runs until we run out of keys
-MULTIOUTER:
+iter:
 	for {
 		im := &iterSetMember{exists: make([]bool, len(members))}
 		first := true
@@ -339,7 +339,7 @@ MULTIOUTER:
 			// The member will be nil if the key it is from has no more members
 			if m.member == nil {
 				if m.key == 0 && stopEarly {
-					break MULTIOUTER
+					break iter
 				}
 				continue
 			}

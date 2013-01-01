@@ -269,12 +269,12 @@ func combineZset(args [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 
 	go multiZsetIter(args[2:numKeys+2], members, op != zsetUnion)
 
-COMBINEOUTER:
+combine:
 	for m := range members {
 		if op == zsetInter {
 			for _, k := range m.exists {
 				if !k {
-					continue COMBINEOUTER
+					continue combine
 				}
 			}
 		}
@@ -399,7 +399,7 @@ func multiZsetIter(keys [][]byte, out chan<- *iterZsetMember, stopEarly bool) {
 		members[i] = m
 	}
 
-MULTIOUTER:
+iter:
 	for {
 		im := &iterZsetMember{exists: make([]bool, len(members)), scores: make([]float64, len(members))}
 		first := true
@@ -409,7 +409,7 @@ MULTIOUTER:
 			// The member will be nil if the key it is from has no more members
 			if m.member == nil {
 				if m.key == 0 && stopEarly {
-					break MULTIOUTER
+					break iter
 				}
 				continue
 			}
@@ -618,12 +618,12 @@ func ZunionInterKeys(args [][]byte) [][]byte {
 	}
 	keys := make([][]byte, 1, 1+numKeys)
 	keys[0] = args[0]
-KEYLOOP:
+keyloop:
 	for _, k := range args[2 : 2+numKeys] {
 		for _, key := range keys {
 			// skip keys that are already in the array
 			if bytes.Equal(k, key) {
-				continue KEYLOOP
+				continue keyloop
 			}
 		}
 		keys = append(keys, k)
