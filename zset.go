@@ -207,7 +207,7 @@ const (
 
 func combineZset(args [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 	var count uint32
-	res := make([]interface{}, 0)
+	res := []interface{}{}
 	members := make(chan *iterZsetMember)
 	var setKey, scoreKey *KeyBuffer
 	scoreBytes := make([]byte, 8)

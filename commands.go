@@ -225,7 +225,7 @@ func Type(args [][]byte, wb *levigo.WriteBatch) interface{} {
 func Keys(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	it := DB.NewIterator(ReadWithoutCacheFill)
 	defer it.Close()
-	keys := make([]interface{}, 0)
+	keys := []interface{}{}
 	pattern := string(args[0])
 
 	for it.Seek([]byte{MetaKey}); it.Valid(); it.Next() {

@@ -212,7 +212,7 @@ func Sdiffstore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 
 func combineSet(keys [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 	var count uint32
-	res := make([]interface{}, 0)
+	res := []interface{}{}
 	members := make(chan *iterSetMember)
 	var storeKey *KeyBuffer
 	var mk []byte
