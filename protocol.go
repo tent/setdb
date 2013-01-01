@@ -7,8 +7,22 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/jmhodges/levigo"
+)
+
+type client struct {
+	cn net.Conn
+	r  *bufio.Reader
+	w  chan []byte
+
+	writeQueueSize int // current queue size in bytes
+}
+
+var (
+	clients    = make(map[string]*client) // ip:port -> client mapping
+	clientsMtx = &sync.RWMutex{}
 )
 
 func listen() {
@@ -24,34 +38,53 @@ func listen() {
 	}
 }
 
-func handleClient(client net.Conn) {
-	r := bufio.NewReader(client)
+func handleClient(cn net.Conn) {
+	c := &client{cn: cn, r: bufio.NewReader(cn), w: make(chan []byte)}
+	defer close(c.w)
 
+	addr := cn.RemoteAddr().String()
+	clientsMtx.Lock()
+	clients[addr] = c
+	clientsMtx.Unlock()
+	defer func() {
+		clientsMtx.Lock()
+		delete(clients, addr)
+		clientsMtx.Unlock()
+	}()
+
+	o := make(chan []byte)
+	go responseQueue(c, o)
+	go responseWriter(c, o)
+
+	protocolHandler(c)
+}
+
+func protocolHandler(c *client) {
 	// Read a length (looks like "$3\r\n")
 	readLength := func(prefix byte) (length int, err error) {
-		c, err := r.ReadByte()
+		b, err := c.r.ReadByte()
 		if err != nil {
 			return
 		}
-		if c != prefix {
-			protocolError(client, "invalid length")
+		if b != prefix {
+			writeProtocolError(c.w, "invalid length")
 			return
 		}
-		b, overflowed, err := r.ReadLine() // Read bytes will look like "123"
+		l, overflowed, err := c.r.ReadLine() // Read bytes will look like "123"
 		if err != nil {
 			return
 		}
 		if overflowed {
-			protocolError(client, "length line too long")
+			writeProtocolError(c.w, "length line too long")
 			return
 		}
-		if len(b) == 0 {
-			protocolError(client, "missing length")
+		if len(l) == 0 {
+			writeProtocolError(c.w, "missing length")
 			return
 		}
-		length, err = strconv.Atoi(string(b))
+		length, err = strconv.Atoi(string(l))
 		if err != nil {
-			protocolError(client, "length is not a valid integer")
+			writeProtocolError(c.w, "length is not a valid integer")
 			return
 		}
 		return
@@ -59,20 +92,20 @@ func handleClient(client net.Conn) {
 
 	runCommand := func(args [][]byte) (err error) {
 		if len(args) == 0 {
-			protocolError(client, "missing command")
+			writeProtocolError(c.w, "missing command")
 			return
 		}
 
 		// lookup the command
 		command, ok := commands[strings.ToLower(string(args[0]))]
 		if !ok {
-			writeError(client, "unknown command '"+string(args[0])+"'")
+			writeError(c.w, "unknown command '"+string(args[0])+"'")
 			return
 		}
 
 		// check command arity, negative arity means >= n
 		if (command.arity < 0 && len(args)-1 < -command.arity) || (command.arity >= 0 && len(args)-1 > command.arity) {
-			writeError(client, "wrong number of arguments for '"+string(args[0])+"' command")
+			writeError(c.w, "wrong number of arguments for '"+string(args[0])+"' command")
 			return
 		}
 
@@ -89,21 +122,18 @@ func handleClient(client net.Conn) {
 				err = DB.Write(DefaultWriteOptions, wb)
 			}
 			if err != nil {
-				writeError(client, "data write error: "+err.Error())
+				writeError(c.w, "data write error: "+err.Error())
 				return
 			}
 		}
 		command.unlockKeys(args[1:])
-		err = writeReply(client, res)
-		if err != nil {
-			return
-		}
+		writeReply(c.w, res)
 
 		return
 	}
 
 	processInline := func() error {
-		line, err := r.ReadBytes('\n')
+		line, err := c.r.ReadBytes('\n')
 		if err != nil {
 			return err
 		}
@@ -114,7 +144,7 @@ func handleClient(client net.Conn) {
 	// Client event loop, each iteration handles a command
 	for {
 		// check if we're using the old inline protocol
-		b, err := r.Peek(1)
+		b, err := c.r.Peek(1)
 		if err != nil {
 			return
 		}
@@ -143,13 +173,13 @@ func handleClient(client net.Conn) {
 
 			// Read the argument bytes
 			args[i] = make([]byte, length)
-			_, err = io.ReadFull(r, args[i])
+			_, err = io.ReadFull(c.r, args[i])
 			if err != nil {
 				return
 			}
 
 			// The argument has a trailing \r\n that we need to discard
-			r.Read(make([]byte, 2))
+			c.r.Read(make([]byte, 2))
 		}
 
 		err = runCommand(args)
@@ -159,124 +189,130 @@ func handleClient(client net.Conn) {
 	}
 }
 
-func writeReply(w io.Writer, reply interface{}) (err error) {
+func responseQueue(c *client, out chan<- []byte) {
+	defer close(out)
+
+	queue := [][]byte{}
+
+receive:
+	for {
+		// ensure that the queue always has an item in it
+		if len(queue) == 0 {
+			v, ok := <-c.w
+			if !ok {
+				break // in is closed, we're done
+			}
+			queue = append(queue, v)
+			c.writeQueueSize += len(v)
+		}
+
+		select {
+		case v, ok := <-c.w:
+			if !ok {
+				break receive // in is closed, we're done
+			}
+			queue = append(queue, v)
+			c.writeQueueSize += len(v)
+		case out <- queue[0]:
+			c.writeQueueSize -= len(queue[0])
+			queue = queue[1:]
+		}
+	}
+
+	for _, v := range queue {
+		out <- v
+	}
+}
+
+func responseWriter(c *client, out <-chan []byte) {
+	for v := range out {
+		c.cn.Write(v)
+	}
+}
+
+func writeReply(w chan<- []byte, reply interface{}) {
 	if _, ok := reply.([]interface{}); !ok && reply == nil {
-		return writeNil(w)
+		writeNil(w)
+		return
 	}
 	switch reply.(type) {
 	case string:
-		err = writeString(w, reply.(string))
+		writeString(w, reply.(string))
 	case []byte:
-		err = writeBulk(w, reply.([]byte))
+		writeBulk(w, reply.([]byte))
 	case int:
-		err = writeInt(w, int64(reply.(int)))
+		writeInt(w, int64(reply.(int)))
 	case int64:
-		err = writeInt(w, reply.(int64))
+		writeInt(w, reply.(int64))
 	case uint32:
-		err = writeInt(w, int64(reply.(uint32)))
+		writeInt(w, int64(reply.(uint32)))
 	case error:
-		err = writeError(w, reply.(error).Error())
+		writeError(w, reply.(error).Error())
 	case []interface{}:
-		err = writeMultibulk(w, reply.([]interface{}))
+		writeMultibulk(w, reply.([]interface{}))
 	case *cmdReplyStream:
-		err = writeMultibulkStream(w, reply.(*cmdReplyStream))
+		writeMultibulkStream(w, reply.(*cmdReplyStream))
 	case map[string]bool:
-		err = writeMultibulkStringMap(w, reply.(map[string]bool))
+		writeMultibulkStringMap(w, reply.(map[string]bool))
 	default:
 		panic("Invalid reply type")
 	}
-	return
 }
 
-func writeNil(w io.Writer) error {
-	_, err := w.Write([]byte("$-1\r\n"))
-	return err
+func writeProtocolError(w chan<- []byte, msg string) {
+	writeError(w, "Protocol error: "+msg)
 }
 
-func writeInt(w io.Writer, n int64) error {
-	_, err := w.Write([]byte(":" + strconv.FormatInt(n, 10) + "\r\n"))
-	return err
+func writeNil(w chan<- []byte) {
+	w <- []byte("$-1\r\n")
 }
 
-func writeString(w io.Writer, s string) error {
-	_, err := w.Write([]byte("+" + s + "\r\n"))
-	return err
+func writeInt(w chan<- []byte, n int64) {
+	w <- []byte(":" + strconv.FormatInt(n, 10) + "\r\n")
 }
 
-func writeBulk(w io.Writer, b []byte) error {
+func writeString(w chan<- []byte, s string) {
+	w <- []byte("+" + s + "\r\n")
+}
+
+func writeBulk(w chan<- []byte, b []byte) {
 	if b == nil {
-		_, err := w.Write([]byte("$-1\r\n"))
-		return err
+		w <- []byte("$-1\r\n")
 	}
 	// TODO: find a more efficient way of doing this
-	_, err := w.Write([]byte("$" + strconv.Itoa(len(b)) + "\r\n"))
-	if err != nil {
-		return err
-	}
-	_, err = w.Write(b)
-	if err != nil {
-		return err
-	}
-	_, err = w.Write([]byte("\r\n"))
-	return err
+	w <- []byte("$" + strconv.Itoa(len(b)) + "\r\n")
+	w <- b
+	w <- []byte("\r\n")
 }
 
-func writeMultibulkStream(w io.Writer, reply *cmdReplyStream) error {
-	err := writeMultibulkLength(w, reply.size)
-	if err != nil {
-		return err
-	}
+func writeMultibulkStream(w chan<- []byte, reply *cmdReplyStream) {
+	writeMultibulkLength(w, reply.size)
 	for r := range reply.items {
-		err = writeReply(w, r)
-		if err != nil {
-			return err
-		}
+		writeReply(w, r)
 	}
-	return nil
 }
 
-func writeMultibulk(w io.Writer, reply []interface{}) error {
+func writeMultibulk(w chan<- []byte, reply []interface{}) {
 	if reply == nil {
-		err := writeMultibulkLength(w, -1)
-		return err
+		writeMultibulkLength(w, -1)
 	}
-	err := writeMultibulkLength(w, int64(len(reply)))
-	if err != nil {
-		return err
-	}
+	writeMultibulkLength(w, int64(len(reply)))
 	for _, r := range reply {
-		err = writeReply(w, r)
-		if err != nil {
-			return err
-		}
+		writeReply(w, r)
 	}
-	return nil
 }
 
-func writeMultibulkStringMap(w io.Writer, reply map[string]bool) error {
-	err := writeMultibulkLength(w, int64(len(reply)))
-	if err != nil {
-		return err
-	}
+func writeMultibulkStringMap(w chan<- []byte, reply map[string]bool) {
+	writeMultibulkLength(w, int64(len(reply)))
 	for r, _ := range reply {
-		err = writeBulk(w, []byte(r))
-		if err != nil {
-			return err
-		}
+		writeBulk(w, []byte(r))
 	}
-	return nil
 }
 
-func writeMultibulkLength(w io.Writer, n int64) error {
-	_, err := w.Write([]byte("*" + strconv.FormatInt(n, 10) + "\r\n"))
-	return err
+func writeMultibulkLength(w chan<- []byte, n int64) {
+	w <- []byte("*" + strconv.FormatInt(n, 10) + "\r\n")
 }
 
-func writeError(w io.Writer, msg string) error {
-	_, err := w.Write([]byte("-ERR " + msg + "\r\n"))
-	return err
-}
-
-func protocolError(conn net.Conn, msg string) {
-	writeError(conn, "Protocol error: "+msg)
+func writeError(w chan<- []byte, msg string) {
+	w <- []byte("-ERR " + msg + "\r\n")
 }
