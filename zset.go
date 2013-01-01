@@ -344,7 +344,7 @@ func (m zsetMembers) Less(i, j int) bool { return bytes.Compare(m[i].member, m[j
 func (m zsetMembers) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
 
 // See set.go's multiSetIter() for details on how this works
-func multiZsetIter(keys [][]byte, out chan *iterZsetMember, stopEarly bool) {
+func multiZsetIter(keys [][]byte, out chan<- *iterZsetMember, stopEarly bool) {
 	defer close(out)
 	snapshot := DB.NewSnapshot()
 	opts := levigo.NewReadOptions()

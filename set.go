@@ -288,7 +288,7 @@ func (m setMembers) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
 // The member list is then checked for any other keys that have the same member.
 // The first member is sent to out, and all keys that had that member are iterated
 // forward. This is repeated until all keys have run out of members.
-func multiSetIter(keys [][]byte, out chan *iterSetMember, stopEarly bool) {
+func multiSetIter(keys [][]byte, out chan<- *iterSetMember, stopEarly bool) {
 	defer close(out)
 	// Set up a snapshot so that we have a consistent view of the data
 	snapshot := DB.NewSnapshot()
