@@ -137,10 +137,11 @@ func protocolHandler(c *client) {
 		if err != nil {
 			return err
 		}
-		args := bytes.Split(line[:len(line)-2], []byte(" "))
-		return runCommand(args)
+		return runCommand(bytes.Split(line[:len(line)-2], []byte(" ")))
 	}
 
+	scratch := make([]byte, 2)
+	args := [][]byte{}
 	// Client event loop, each iteration handles a command
 	for {
 		// check if we're using the old inline protocol
@@ -162,8 +163,6 @@ func protocolHandler(c *client) {
 			return
 		}
 
-		args := make([][]byte, argCount)
-
 		// read the arguments
 		for i := 0; i < argCount; i++ {
 			length, err := readLength('$')
@@ -172,20 +171,23 @@ func protocolHandler(c *client) {
 			}
 
 			// Read the argument bytes
-			args[i] = make([]byte, length)
+			args = append(args, make([]byte, length))
 			_, err = io.ReadFull(c.r, args[i])
 			if err != nil {
 				return
 			}
 
 			// The argument has a trailing \r\n that we need to discard
-			c.r.Read(make([]byte, 2))
+			c.r.Read(scratch) // TODO: make sure these bytes are read
 		}
 
 		err = runCommand(args)
 		if err != nil {
 			return
 		}
+
+		// Truncate arguments for the next run
+		args = args[0:0]
 	}
 }
 
