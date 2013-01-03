@@ -14,8 +14,8 @@ import (
 // StringKey | key = value
 
 func Set(args [][]byte, wb *levigo.WriteBatch) interface{} {
-	key := metaKey(args[0])
-	res, err := DB.Get(DefaultReadOptions, key)
+	mk := metaKey(args[0])
+	res, err := DB.Get(DefaultReadOptions, mk)
 	if err != nil {
 		return err
 	}
@@ -24,16 +24,7 @@ func Set(args [][]byte, wb *levigo.WriteBatch) interface{} {
 		del(args[0], res[0], wb)
 	}
 
-	// store the string length in the metakey
-	meta := res
-	if len(res) != 5 {
-		meta = make([]byte, 5)
-	}
-	meta[0] = StringLengthValue
-	binary.BigEndian.PutUint32(meta[1:], uint32(len(args[1])))
-	wb.Put(key, meta)
-
-	// store the string
+	setStringLen(mk, len(args[1]), wb)
 	wb.Put(stringKey(args[0]), args[1])
 
 	return "OK"
@@ -49,6 +40,13 @@ func Get(args [][]byte, wb *levigo.WriteBatch) interface{} {
 
 func DelString(key []byte, wb *levigo.WriteBatch) {
 	wb.Delete(stringKey(key))
+}
+
+func setStringLen(key []byte, length int, wb *levigo.WriteBatch) {
+	meta := make([]byte, 5)
+	meta[0] = StringLengthValue
+	binary.BigEndian.PutUint32(meta[1:], uint32(length))
+	wb.Put(key, meta)
 }
 
 func stringKey(k []byte) []byte {

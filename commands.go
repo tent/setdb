@@ -119,6 +119,8 @@ var commandList = []cmdDesc{
 	{"zscore", Zscore, 2, false, 0, 0, 0, nil},
 	{"zunionstore", Zunionstore, -3, true, 0, 0, 0, ZunionInterKeys},
 	{"zinterstore", Zinterstore, -3, true, 0, 0, 0, ZunionInterKeys},
+	{"restore", Restore, 3, true, 0, 0, 0, nil},
+	{"select", Select, 1, false, 0, 0, 0, nil},
 }
 
 // extract the keys from the command args
@@ -244,6 +246,11 @@ func Keys(args [][]byte, wb *levigo.WriteBatch) interface{} {
 		}
 	}
 	return keys
+}
+
+// No-op for now
+func Select(args [][]byte, wb *levigo.WriteBatch) interface{} {
+	return "OK"
 }
 
 func Del(args [][]byte, wb *levigo.WriteBatch) interface{} {
