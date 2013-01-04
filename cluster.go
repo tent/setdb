@@ -12,7 +12,7 @@ func Restore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	if err != nil {
 		return InvalidIntError
 	}
-	err = rdb.ParseDump(args[2], 0, args[0], ttl, &rdbParser{wb: wb})
+	err = rdb.DecodeDump(args[2], 0, args[0], ttl, &rdbDecoder{wb: wb})
 	if err != nil {
 		return err
 	}
