@@ -260,21 +260,31 @@ func Del(args [][]byte, wb *levigo.WriteBatch) interface{} {
 
 	for _, key := range args {
 		k = bufMetaKey(k, key)
-		res, err := DB.Get(ReadWithoutCacheFill, k)
+		d, err := delKey(k, wb)
 		if err != nil {
 			return err
 		}
-		if res == nil {
-			continue
+		if d {
+			deleted++
 		}
-		if len(res) == 0 {
-			return InvalidDataError
-		}
-		del(key, res[0], wb)
-		wb.Delete(k)
-		deleted++
 	}
 	return deleted
+}
+
+func delKey(key []byte, wb *levigo.WriteBatch) (deleted bool, err error) {
+	res, err := DB.Get(ReadWithoutCacheFill, key)
+	if err != nil {
+		return
+	}
+	if res == nil {
+		return
+	}
+	if len(res) < 1 {
+		return false, InvalidDataError
+	}
+	del(key[1:], res[0], wb)
+	wb.Delete(key)
+	return true, nil
 }
 
 func del(key []byte, t byte, wb *levigo.WriteBatch) {

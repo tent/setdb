@@ -211,10 +211,11 @@ func combineZset(args [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 	members := make(chan *iterZsetMember)
 	var setKey, scoreKey *KeyBuffer
 	scoreBytes := make([]byte, 8)
+	mk := metaKey(args[0])
 
 	if wb != nil {
-		d := Del(args[0:1], wb)
-		if err, ok := d.(error); ok {
+		_, err := delKey(mk, wb)
+		if err != nil {
 			return err
 		}
 		setKey = NewKeyBuffer(ZSetKey, args[0], 0)
@@ -317,7 +318,7 @@ combine:
 
 	if wb != nil {
 		if count > 0 {
-			setZcard(metaKey(args[0]), count, wb)
+			setZcard(mk, count, wb)
 		}
 		return count
 	}

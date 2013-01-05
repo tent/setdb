@@ -219,8 +219,8 @@ func combineSet(keys [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 
 	if wb != nil {
 		mk = metaKey(keys[0])
-		d := Del(keys[0:1], wb)
-		if err, ok := d.(error); ok {
+		_, err := delKey(mk, wb)
+		if err != nil {
 			return err
 		}
 		storeKey = NewKeyBuffer(SetKey, keys[0], 0)
