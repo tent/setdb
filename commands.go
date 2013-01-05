@@ -34,6 +34,8 @@ var InvalidDataError = fmt.Errorf("Invalid data")
 var InvalidIntError = fmt.Errorf("value is not an integer or out of range")
 var SyntaxError = fmt.Errorf("syntax error")
 
+type IOError struct{ error }
+
 // if the number of items is known before the items,
 // they do not need to be buffered into memory, and can be streamed over a channel
 type cmdReplyStream struct {
@@ -121,6 +123,7 @@ var commandList = []cmdDesc{
 	{"zinterstore", Zinterstore, -3, true, 0, 0, 0, ZunionInterKeys},
 	{"restore", Restore, 3, true, 0, 0, 0, nil},
 	{"dump", Dump, 1, false, 0, 0, 0, nil},
+	{"migrate", Migrate, 5, true, 2, 2, 0, nil},
 	{"select", Select, 1, false, 0, 0, 0, nil},
 }
 
@@ -347,7 +350,6 @@ func init() {
 // Keys
 // EXPIRE
 // EXPIREAT
-// MIGRATE
 // MOVE
 // OBJECT?
 // PERSIST

@@ -233,12 +233,12 @@ func responseWriter(c *client, out <-chan []byte) {
 
 func writeReply(w chan<- []byte, reply interface{}) {
 	if _, ok := reply.([]interface{}); !ok && reply == nil {
-		writeNil(w)
+		w <- []byte("$-1\r\n")
 		return
 	}
 	switch reply.(type) {
 	case string:
-		writeString(w, reply.(string))
+		w <- []byte("+" + reply.(string) + "\r\n")
 	case []byte:
 		writeBulk(w, reply.([]byte))
 	case int:
@@ -247,6 +247,8 @@ func writeReply(w chan<- []byte, reply interface{}) {
 		writeInt(w, reply.(int64))
 	case uint32:
 		writeInt(w, int64(reply.(uint32)))
+	case IOError:
+		w <- []byte("-IOERR " + reply.(IOError).Error() + "\r\n")
 	case error:
 		writeError(w, reply.(error).Error())
 	case []interface{}:
@@ -264,16 +266,8 @@ func writeProtocolError(w chan<- []byte, msg string) {
 	writeError(w, "Protocol error: "+msg)
 }
 
-func writeNil(w chan<- []byte) {
-	w <- []byte("$-1\r\n")
-}
-
 func writeInt(w chan<- []byte, n int64) {
 	w <- []byte(":" + strconv.FormatInt(n, 10) + "\r\n")
-}
-
-func writeString(w chan<- []byte, s string) {
-	w <- []byte("+" + s + "\r\n")
 }
 
 func writeBulk(w chan<- []byte, b []byte) {
