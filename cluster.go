@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"strconv"
 
 	"github.com/jmhodges/levigo"
@@ -17,4 +18,17 @@ func Restore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 		return err
 	}
 	return "OK"
+}
+
+func Dump(args [][]byte, wb *levigo.WriteBatch) interface{} {
+	buf := &bytes.Buffer{}
+	e := &rdbEncoder{rdb.NewEncoder(buf)}
+	err := e.encodeKey(args[0], true)
+	if err != nil {
+		return err
+	}
+	if buf.Len() == 0 {
+		return nil
+	}
+	return buf.Bytes()
 }

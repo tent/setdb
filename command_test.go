@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"os"
 	"testing"
 
@@ -27,6 +28,12 @@ func MaybeFail(c *C, err error) {
 		c.FailNow()
 	}
 }
+
+var stringDump, _ = base64.StdEncoding.DecodeString("AAVIZWxsbwYAKiSfaMhQwxA=")
+var hashDump, _ = base64.StdEncoding.DecodeString("BAIGZmllbGQxBUhlbGxvBmZpZWxkMgVXb3JsZAYAgLPX8O51AWE=")
+var setDump, _ = base64.StdEncoding.DecodeString("AgIFSGVsbG8FV29ybGQGADOH1ks5wqwF")
+var zsetDump, _ = base64.StdEncoding.DecodeString("AwMDdHdvATMDdW5vATEDb25lATEGAGHZ/WW1zUvC")
+var listDump, _ = base64.StdEncoding.DecodeString("AQIFSGVsbG8FV29ybGQGACzxp+PtJo1E")
 
 var tests = []struct {
 	command  string
@@ -187,18 +194,23 @@ var tests = []struct {
 	{"lrange", "mylist -1 -1", []interface{}{[]byte("world")}},
 	{"lrange", "mylist -2 -5", []interface{}{}},
 	{"lrange", "mylist 1 2", []interface{}{[]byte("hello"), []byte("world")}},
-	{"restore", "r 0 \u0000\u0005Hello\u0006\u0000*$\x9Fh\xC8P\xC3\u0010", "OK"},
+	{"restore", "r 0 " + string(stringDump), "OK"},
+	{"dump", "r", stringDump},
 	{"get", "r", []byte("Hello")},
-	{"restore", "r 0 \r))\u0000\u0000\u0000!\u0000\u0000\u0000\u0004\u0000\u0000\u0006field1\b\u0005Hello\a\u0006field2\b\u0005World\xFF\u0006\u0000\xC6<\x90\x89E+\u001D\x9F", "OK"},
+	{"restore", "r 0 " + string(hashDump), "OK"},
+	{"dump", "r", hashDump},
 	{"hlen", "r", uint32(2)},
 	{"hgetall", "r", []interface{}{[]byte("field1"), []byte("Hello"), []byte("field2"), []byte("World")}},
-	{"restore", "r 0 \u0002\u0002\u0005World\u0005Hello\u0006\u0000<\xC3#\xC4\u0017\xAFo\xA7", "OK"},
+	{"restore", "r 0 " + string(setDump), "OK"},
+	{"dump", "r", setDump},
 	{"scard", "r", uint32(2)},
 	{"smembers", "r", []interface{}{[]byte("Hello"), []byte("World")}},
-	{"restore", "r 0 \f  \u0000\u0000\u0000\u001D\u0000\u0000\u0000\u0006\u0000\u0000\u0003one\u0005\xF2\u0002\u0003uno\u0005\xF2\u0002\u0003two\u0005\xF4\xFF\u0006\u0000\xA9\xD9ֹ\xEDL\xB7v", "OK"},
+	{"restore", "r 0 " + string(zsetDump), "OK"},
+	{"dump", "r", zsetDump},
 	{"zcard", "r", uint32(3)},
 	{"zrange", "r 0 -1 withscores", []interface{}{[]byte("one"), []byte("1"), []byte("uno"), []byte("1"), []byte("two"), []byte("3")}},
-	{"restore", "r 0 \n\u0019\u0019\u0000\u0000\u0000\u0011\u0000\u0000\u0000\u0002\u0000\u0000\u0005Hello\a\u0005World\xFF\u0006\u0000Ԕ\xA1\xF0}P\u0006^", "OK"},
+	{"restore", "r 0 " + string(listDump), "OK"},
+	{"dump", "r", listDump},
 	{"llen", "r", uint32(2)},
 	{"lrange", "r 0 -1", []interface{}{[]byte("Hello"), []byte("World")}},
 }

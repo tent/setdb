@@ -120,6 +120,7 @@ var commandList = []cmdDesc{
 	{"zunionstore", Zunionstore, -3, true, 0, 0, 0, ZunionInterKeys},
 	{"zinterstore", Zinterstore, -3, true, 0, 0, 0, ZunionInterKeys},
 	{"restore", Restore, 3, true, 0, 0, 0, nil},
+	{"dump", Dump, 1, false, 0, 0, 0, nil},
 	{"select", Select, 1, false, 0, 0, 0, nil},
 }
 
@@ -334,7 +335,6 @@ func init() {
 }
 
 // Keys
-// DUMP
 // EXPIRE
 // EXPIREAT
 // MIGRATE
@@ -347,7 +347,6 @@ func init() {
 // RANDOMKEY
 // RENAME
 // RENAMENX
-// RESTORE
 // SORT
 // TTL
 // TYPE
