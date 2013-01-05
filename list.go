@@ -9,7 +9,7 @@ import (
 
 // Keys stored in LevelDB for lists
 //
-// MetaKey | key = ListLengthValue | 1 byte flags | uint32 list length | int64 sequence number of the leftmost element | int64 sequence number of the rightmost element
+// MetaKey | key = ListLengthValue | uint32 list length | 1 byte flags | int64 sequence number of the leftmost element | int64 sequence number of the rightmost element
 //
 // For each list item:
 // ListKey | key length uint32 | key | int64 sequence number = value
@@ -237,8 +237,8 @@ func llen(key []byte, opts *levigo.ReadOptions) (*listDetails, error) {
 	if len(res) < 22 || res[0] != ListLengthValue {
 		return nil, InvalidDataError
 	}
-	l.flags = res[1]
-	l.length = binary.BigEndian.Uint32(res[2:])
+	l.length = binary.BigEndian.Uint32(res[1:])
+	l.flags = res[5]
 	l.left = int64(binary.BigEndian.Uint64(res[6:]))
 	l.right = int64(binary.BigEndian.Uint64(res[14:]))
 	return l, nil
@@ -247,8 +247,8 @@ func llen(key []byte, opts *levigo.ReadOptions) (*listDetails, error) {
 func setLlen(key []byte, l *listDetails, wb *levigo.WriteBatch) {
 	data := make([]byte, 22)
 	data[0] = ListLengthValue
-	data[1] = l.flags
-	binary.BigEndian.PutUint32(data[2:], l.length)
+	binary.BigEndian.PutUint32(data[1:], l.length)
+	data[5] = l.flags
 	binary.BigEndian.PutUint64(data[6:], uint64(l.left))
 	binary.BigEndian.PutUint64(data[14:], uint64(l.right))
 	wb.Put(key, data)
