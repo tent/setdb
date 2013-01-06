@@ -478,7 +478,7 @@ func zrange(args [][]byte, reverse bool) interface{} {
 	var withscores bool
 	items := end + 1 - start
 	if len(args) >= 4 {
-		if !bytes.Equal(bytes.ToLower(args[3]), []byte("withscores")) || len(args) > 4 { // withscores flag
+		if !bytes.Equal(bytes.ToLower(args[3]), []byte("withscores")) || len(args) > 4 {
 			DB.ReleaseSnapshot(snapshot)
 			opts.Close()
 			return SyntaxError
@@ -518,6 +518,126 @@ func zrange(args [][]byte, reverse bool) interface{} {
 	}()
 
 	return stream
+}
+
+func Zrangebyscore(args [][]byte, wb *levigo.WriteBatch) interface{} {
+	return zrangebyscore(args, false)
+}
+
+func Zrevrangebyscore(args [][]byte, wb *levigo.WriteBatch) interface{} {
+	return zrangebyscore(args, true)
+}
+
+func zrangebyscore(args [][]byte, reverse bool) interface{} {
+	// use a snapshot for this read so that the zcard is consistent
+	snapshot := DB.NewSnapshot()
+	opts := levigo.NewReadOptions()
+	opts.SetSnapshot(snapshot)
+	defer opts.Close()
+	defer DB.ReleaseSnapshot(snapshot)
+
+	card, err := zcard(metaKey(args[0]), opts)
+	if err != nil {
+		return err
+	}
+	if card == 0 {
+		return []interface{}{}
+	}
+
+	var minExclusive, maxExclusive bool
+	if args[1][0] == '(' {
+		minExclusive = true
+		args[1] = args[1][1:]
+	}
+	if args[2][0] == '(' {
+		maxExclusive = true
+		args[2] = args[2][1:]
+	}
+	min, err := strconv.ParseFloat(string(args[1]), 64)
+	max, err2 := strconv.ParseFloat(string(args[2]), 64)
+	if err != nil || err2 != nil {
+		return fmt.Errorf("min or max is not a float")
+	}
+	if reverse {
+		min, max = max, min
+		minExclusive, maxExclusive = maxExclusive, minExclusive
+	}
+	// the start comes after the end, so we're not going to find anything
+	if min > max {
+		return []interface{}{}
+	}
+
+	var withscores bool
+	var offset, count int64 = 0, -1
+	if len(args) > 3 {
+		if len(args) == 4 || len(args) == 7 {
+			if bytes.Equal(bytes.ToLower(args[3]), []byte("withscores")) {
+				withscores = true
+			}
+		} else if len(args) != 6 {
+			return SyntaxError
+		}
+		if len(args) >= 6 {
+			if bytes.Equal(bytes.ToLower(args[len(args)-3]), []byte("limit")) {
+				offset, err = strconv.ParseInt(string(args[len(args)-2]), 10, 64)
+				count, err2 = strconv.ParseInt(string(args[len(args)-1]), 10, 64)
+				if err != nil || err2 != nil {
+					return InvalidIntError
+				}
+				if offset < 0 || count < 1 {
+					return []interface{}{}
+				}
+			} else {
+				return SyntaxError
+			}
+		}
+	}
+
+	it := DB.NewIterator(opts)
+	defer it.Close()
+
+	res := []interface{}{}
+	iterKey := NewKeyBuffer(ZScoreKey, args[0], 8)
+	if reverse {
+		setZScoreKeyScore(iterKey, max)
+		iterKey.ReverseIterKey()
+	} else {
+		setZScoreKeyScore(iterKey, min)
+	}
+	it.Seek(iterKey.Key())
+	for i := int64(0); it.Valid(); i++ {
+		if reverse {
+			it.Prev()
+		}
+		if i >= offset {
+			if count > -1 && i-offset >= count {
+				break
+			}
+			k := it.Key()
+			if !iterKey.IsPrefixOf(k) {
+				break
+			}
+			score, member := parseZScoreKey(it.Key(), len(args[0]))
+			if (!minExclusive && score < min) || (minExclusive && score <= min) {
+				if !reverse {
+					it.Next()
+				}
+				continue
+			}
+			if (!maxExclusive && score > max) || (maxExclusive && score >= max) {
+				break
+			}
+			res = append(res, member)
+			if withscores {
+				res = append(res, ftoa(score))
+			}
+		}
+		if !reverse {
+			it.Next()
+		}
+	}
+
+	return res
 }
 
 func DelZset(key []byte, wb *levigo.WriteBatch) {
@@ -633,8 +753,6 @@ keyloop:
 }
 
 // ZCOUNT
-// ZREVRANGEBYSCORE
-// ZRANGEBYSCORE
 // ZRANK
 // ZREMRANGEBYRANK
 // ZREMRANGEBYSCORE
