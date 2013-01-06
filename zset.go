@@ -520,15 +520,28 @@ func zrange(args [][]byte, reverse bool) interface{} {
 	return stream
 }
 
+type zrangeFlag byte
+
+const (
+	zrangeForward zrangeFlag = iota
+	zrangeReverse
+	zrangeDelete
+	zrangeCount
+)
+
 func Zrangebyscore(args [][]byte, wb *levigo.WriteBatch) interface{} {
-	return zrangebyscore(args, false)
+	return zrangebyscore(args, zrangeForward, wb)
 }
 
 func Zrevrangebyscore(args [][]byte, wb *levigo.WriteBatch) interface{} {
-	return zrangebyscore(args, true)
+	return zrangebyscore(args, zrangeReverse, wb)
 }
 
-func zrangebyscore(args [][]byte, reverse bool) interface{} {
+func Zremrangebyscore(args [][]byte, wb *levigo.WriteBatch) interface{} {
+	return zrangebyscore(args, zrangeDelete, wb)
+}
+
+func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interface{} {
 	// use a snapshot for this read so that the zcard is consistent
 	snapshot := DB.NewSnapshot()
 	opts := levigo.NewReadOptions()
@@ -536,7 +549,8 @@ func zrangebyscore(args [][]byte, reverse bool) interface{} {
 	defer opts.Close()
 	defer DB.ReleaseSnapshot(snapshot)
 
-	card, err := zcard(metaKey(args[0]), opts)
+	mk := metaKey(args[0])
+	card, err := zcard(mk, opts)
 	if err != nil {
 		return err
 	}
@@ -558,18 +572,19 @@ func zrangebyscore(args [][]byte, reverse bool) interface{} {
 	if err != nil || err2 != nil {
 		return fmt.Errorf("min or max is not a float")
 	}
-	if reverse {
+	if flag == zrangeReverse {
 		min, max = max, min
 		minExclusive, maxExclusive = maxExclusive, minExclusive
 	}
+
 	// the start comes after the end, so we're not going to find anything
-	if min > max {
+	if flag <= zrangeReverse && min > max {
 		return []interface{}{}
 	}
 
 	var withscores bool
-	var offset, count int64 = 0, -1
-	if len(args) > 3 {
+	var offset, total int64 = 0, -1
+	if flag <= zrangeReverse && len(args) > 3 {
 		if len(args) == 4 || len(args) == 7 {
 			if bytes.Equal(bytes.ToLower(args[3]), []byte("withscores")) {
 				withscores = true
@@ -580,11 +595,11 @@ func zrangebyscore(args [][]byte, reverse bool) interface{} {
 		if len(args) >= 6 {
 			if bytes.Equal(bytes.ToLower(args[len(args)-3]), []byte("limit")) {
 				offset, err = strconv.ParseInt(string(args[len(args)-2]), 10, 64)
-				count, err2 = strconv.ParseInt(string(args[len(args)-1]), 10, 64)
+				total, err2 = strconv.ParseInt(string(args[len(args)-1]), 10, 64)
 				if err != nil || err2 != nil {
 					return InvalidIntError
 				}
-				if offset < 0 || count < 1 {
+				if offset < 0 || total < 1 {
 					return []interface{}{}
 				}
 			} else {
@@ -596,21 +611,27 @@ func zrangebyscore(args [][]byte, reverse bool) interface{} {
 	it := DB.NewIterator(opts)
 	defer it.Close()
 
+	var deleted uint32
+	var deleteKey *KeyBuffer
+	if flag == zrangeDelete {
+		deleteKey = NewKeyBuffer(ZSetKey, args[0], 0)
+	}
+
 	res := []interface{}{}
 	iterKey := NewKeyBuffer(ZScoreKey, args[0], 8)
-	if reverse {
+	if flag != zrangeReverse {
+		setZScoreKeyScore(iterKey, min)
+	} else {
 		setZScoreKeyScore(iterKey, max)
 		iterKey.ReverseIterKey()
-	} else {
-		setZScoreKeyScore(iterKey, min)
 	}
 	it.Seek(iterKey.Key())
 	for i := int64(0); it.Valid(); i++ {
-		if reverse {
+		if flag == zrangeReverse {
 			it.Prev()
 		}
 		if i >= offset {
-			if count > -1 && i-offset >= count {
+			if total > -1 && i-offset >= total {
 				break
 			}
 			k := it.Key()
@@ -619,7 +640,7 @@ func zrangebyscore(args [][]byte, reverse bool) interface{} {
 			}
 			score, member := parseZScoreKey(it.Key(), len(args[0]))
 			if (!minExclusive && score < min) || (minExclusive && score <= min) {
-				if !reverse {
+				if flag != zrangeReverse {
 					it.Next()
 				}
 				continue
@@ -627,14 +648,31 @@ func zrangebyscore(args [][]byte, reverse bool) interface{} {
 			if (!maxExclusive && score > max) || (maxExclusive && score >= max) {
 				break
 			}
-			res = append(res, member)
-			if withscores {
-				res = append(res, ftoa(score))
+			if flag <= zrangeReverse {
+				res = append(res, member)
+				if withscores {
+					res = append(res, ftoa(score))
+				}
+			}
+			if flag == zrangeDelete {
+				deleteKey.SetSuffix(member)
+				wb.Delete(k)
+				wb.Delete(deleteKey.Key())
+				deleted++
 			}
 		}
-		if !reverse {
+		if flag != zrangeReverse {
 			it.Next()
 		}
+	}
+
+	if flag == zrangeDelete && deleted == card {
+		wb.Delete(mk)
+	} else if deleted > 0 {
+		setZcard(mk, card-deleted, wb)
+	}
+	if flag == zrangeDelete {
+		return deleted
 	}
 
 	return res
@@ -755,5 +793,4 @@ keyloop:
 // ZCOUNT
 // ZRANK
 // ZREMRANGEBYRANK
-// ZREMRANGEBYSCORE
 // ZREVRANK
