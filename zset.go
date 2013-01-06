@@ -541,6 +541,10 @@ func Zremrangebyscore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return zrangebyscore(args, zrangeDelete, wb)
 }
 
+func Zcount(args [][]byte, wb *levigo.WriteBatch) interface{} {
+	return zrangebyscore(args, zrangeCount, wb)
+}
+
 func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interface{} {
 	// use a snapshot for this read so that the zcard is consistent
 	snapshot := DB.NewSnapshot()
@@ -553,9 +557,6 @@ func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interf
 	card, err := zcard(mk, opts)
 	if err != nil {
 		return err
-	}
-	if card == 0 {
-		return []interface{}{}
 	}
 
 	var minExclusive, maxExclusive bool
@@ -577,9 +578,17 @@ func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interf
 		minExclusive, maxExclusive = maxExclusive, minExclusive
 	}
 
-	// the start comes after the end, so we're not going to find anything
-	if flag <= zrangeReverse && min > max {
-		return []interface{}{}
+	if card == 0 || min > max {
+		if flag <= zrangeReverse {
+			return []interface{}{}
+		} else {
+			return 0
+		}
+	}
+
+	// shortcut for zcount of -Inf to +Inf
+	if flag == zrangeCount && math.IsInf(min, -1) && math.IsInf(max, 1) {
+		return card
 	}
 
 	var withscores bool
@@ -611,7 +620,7 @@ func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interf
 	it := DB.NewIterator(opts)
 	defer it.Close()
 
-	var deleted uint32
+	var deleted, count uint32
 	var deleteKey *KeyBuffer
 	if flag == zrangeDelete {
 		deleteKey = NewKeyBuffer(ZSetKey, args[0], 0)
@@ -660,6 +669,9 @@ func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interf
 				wb.Delete(deleteKey.Key())
 				deleted++
 			}
+			if flag == zrangeCount {
+				count++
+			}
 		}
 		if flag != zrangeReverse {
 			it.Next()
@@ -673,6 +685,9 @@ func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interf
 	}
 	if flag == zrangeDelete {
 		return deleted
+	}
+	if flag == zrangeCount {
+		return count
 	}
 
 	return res
@@ -790,7 +805,6 @@ keyloop:
 	return keys
 }
 
-// ZCOUNT
 // ZRANK
 // ZREMRANGEBYRANK
 // ZREVRANK
