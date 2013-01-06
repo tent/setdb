@@ -693,6 +693,57 @@ func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interf
 	return res
 }
 
+func Zrank(args [][]byte, wb *levigo.WriteBatch) interface{} {
+	return zrank(args, false)
+}
+
+func Zrevrank(args [][]byte, wb *levigo.WriteBatch) interface{} {
+	return zrank(args, true)
+}
+
+func zrank(args [][]byte, reverse bool) interface{} {
+	// use a snapshot for this read so that the zcard is consistent
+	snapshot := DB.NewSnapshot()
+	opts := levigo.NewReadOptions()
+	opts.SetSnapshot(snapshot)
+	defer opts.Close()
+	defer DB.ReleaseSnapshot(snapshot)
+
+	card, err := zcard(metaKey(args[0]), opts)
+	if err != nil {
+		return err
+	}
+	if card == 0 {
+		return nil
+	}
+
+	iterKey := NewKeyBuffer(ZScoreKey, args[0], 0)
+	it := DB.NewIterator(opts)
+	defer it.Close()
+
+	if reverse {
+		iterKey.ReverseIterKey()
+	}
+	i := 0
+	for it.Seek(iterKey.Key()); it.Valid(); i++ {
+		if reverse {
+			it.Prev()
+		}
+		k := it.Key()
+		if !iterKey.IsPrefixOf(k) {
+			break
+		}
+		if bytes.Equal(args[1], k[len(args[0])+13:]) {
+			return i
+		}
+		if !reverse {
+			it.Next()
+		}
+	}
+
+	return nil
+}
+
 func DelZset(key []byte, wb *levigo.WriteBatch) {
 	// TODO: count keys to verify everything works as expected?
 	it := DB.NewIterator(ReadWithoutCacheFill)
@@ -805,6 +856,4 @@ keyloop:
 	return keys
 }
 
-// ZRANK
 // ZREMRANGEBYRANK
-// ZREVRANK

@@ -123,6 +123,8 @@ var commandList = []cmdDesc{
 	{"zremrangebyscore", Zremrangebyscore, 3, true, 0, 0, 0, nil},
 	{"zcount", Zcount, 3, false, 0, 0, 0, nil},
 	{"zscore", Zscore, 2, false, 0, 0, 0, nil},
+	{"zrank", Zrank, 2, false, 0, 0, 0, nil},
+	{"zrevrank", Zrevrank, 2, false, 0, 0, 0, nil},
 	{"zunionstore", Zunionstore, -3, true, 0, 0, 0, ZunionInterKeys},
 	{"zinterstore", Zinterstore, -3, true, 0, 0, 0, ZunionInterKeys},
 	{"restore", Restore, 3, true, 0, 0, 0, nil},
