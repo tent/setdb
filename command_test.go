@@ -192,6 +192,7 @@ var tests = []struct {
 	{"type", "asdf", "string"},
 	{"type", "newset", "set"},
 	{"type", "fooz", "zset"},
+	{"type", "aaaaa", "none"},
 	{"lpush", "mylist world hello", uint32(2)},
 	{"llen", "mylist", uint32(2)},
 	{"lpop", "mylist", []byte("hello")},
