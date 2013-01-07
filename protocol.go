@@ -209,15 +209,15 @@ receive:
 		}
 
 		select {
+		case out <- queue[0]:
+			c.writeQueueSize -= len(queue[0])
+			queue = queue[1:]
 		case v, ok := <-c.w:
 			if !ok {
 				break receive // in is closed, we're done
 			}
 			queue = append(queue, v)
 			c.writeQueueSize += len(v)
-		case out <- queue[0]:
-			c.writeQueueSize -= len(queue[0])
-			queue = queue[1:]
 		}
 	}
 
