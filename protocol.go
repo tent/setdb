@@ -97,7 +97,7 @@ func protocolHandler(c *client) {
 		}
 
 		// lookup the command
-		command, ok := commands[string(bytes.ToLower(args[0]))]
+		command, ok := commands[UnsafeBytesToString(bytes.ToLower(args[0]))]
 		if !ok {
 			writeError(c.w, "unknown command '"+string(args[0])+"'")
 			return
