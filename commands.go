@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jmhodges/levigo"
+	"github.com/titanous/bconv"
 	"github.com/titanous/setdb/lockring"
 )
 
@@ -192,9 +193,9 @@ func Echo(args [][]byte, wb *levigo.WriteBatch) interface{} {
 
 func Time(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	now := time.Now()
-	secs := strconv.FormatInt(now.Unix(), 10)
-	micros := strconv.Itoa(now.Nanosecond() / 1000)
-	return []interface{}{[]byte(secs), []byte(micros)}
+	secs := strconv.AppendInt(nil, now.Unix(), 10)
+	micros := strconv.AppendInt(nil, int64(now.Nanosecond()/1000), 10)
+	return []interface{}{secs, micros}
 }
 
 func Exists(args [][]byte, wb *levigo.WriteBatch) interface{} {
@@ -325,8 +326,8 @@ func metaKey(k []byte) []byte {
 }
 
 func parseRange(args [][]byte, length int64) (int64, int64, error) {
-	start, err := strconv.ParseInt(string(args[0]), 10, 64)
-	end, err2 := strconv.ParseInt(string(args[1]), 10, 64)
+	start, err := bconv.ParseInt(args[0], 10, 64)
+	end, err2 := bconv.ParseInt(args[1], 10, 64)
 	if err != nil || err2 != nil {
 		return 0, 0, InvalidIntError
 	}

@@ -3,16 +3,16 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
 	"github.com/jmhodges/levigo"
+	"github.com/titanous/bconv"
 	"github.com/titanous/rdb"
 )
 
 func Restore(args [][]byte, wb *levigo.WriteBatch) interface{} {
-	ttl, err := strconv.ParseInt(string(args[1]), 10, 64)
+	ttl, err := bconv.ParseInt(args[1], 10, 64)
 	if err != nil {
 		return InvalidIntError
 	}
@@ -45,7 +45,7 @@ func dumpKey(key []byte) ([]byte, error) {
 }
 
 func Migrate(args [][]byte, wb *levigo.WriteBatch) interface{} {
-	timeout, err := strconv.ParseInt(string(args[4]), 10, 64)
+	timeout, err := bconv.ParseInt(args[4], 10, 64)
 	if err != nil {
 		return InvalidIntError
 	}

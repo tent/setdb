@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/jmhodges/levigo"
+	"github.com/titanous/bconv"
 )
 
 type client struct {
@@ -81,7 +82,7 @@ func protocolHandler(c *client) {
 			writeProtocolError(c.w, "missing length")
 			return
 		}
-		length, err = strconv.Atoi(string(l))
+		length, err = bconv.Atoi(l)
 		if err != nil {
 			writeProtocolError(c.w, "length is not a valid integer")
 			return
@@ -267,7 +268,7 @@ func writeProtocolError(w chan<- []byte, msg string) {
 }
 
 func writeInt(w chan<- []byte, n int64) {
-	w <- []byte(":" + strconv.FormatInt(n, 10) + "\r\n")
+	w <- append(strconv.AppendInt([]byte{':'}, n, 10), "\r\n"...)
 }
 
 func writeBulk(w chan<- []byte, b []byte) {
@@ -275,7 +276,7 @@ func writeBulk(w chan<- []byte, b []byte) {
 		w <- []byte("$-1\r\n")
 	}
 	// TODO: find a more efficient way of doing this
-	w <- []byte("$" + strconv.Itoa(len(b)) + "\r\n")
+	w <- append(strconv.AppendInt([]byte{'$'}, int64(len(b)), 10), "\r\n"...)
 	w <- b
 	w <- []byte("\r\n")
 }
@@ -305,7 +306,7 @@ func writeMultibulkStringMap(w chan<- []byte, reply map[string]bool) {
 }
 
 func writeMultibulkLength(w chan<- []byte, n int64) {
-	w <- []byte("*" + strconv.FormatInt(n, 10) + "\r\n")
+	w <- append(strconv.AppendInt([]byte{'*'}, n, 10), "\r\n"...)
 }
 
 func writeError(w chan<- []byte, msg string) {

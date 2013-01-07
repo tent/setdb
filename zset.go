@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/jmhodges/levigo"
+	"github.com/titanous/bconv"
 )
 
 // Keys stored in LevelDB for zsets
@@ -46,7 +47,7 @@ func zadd(args [][]byte, wb *levigo.WriteBatch, incr bool) interface{} {
 	// Iterate through each of the score/member pairs
 	for i := 1; i < len(args); i += 2 {
 		var err error
-		score, err = strconv.ParseFloat(string(args[i]), 64)
+		score, err = bconv.ParseFloat(args[i], 64)
 		if err != nil {
 			return fmt.Errorf("'%s' is not a valid float", string(args[1]))
 		}
@@ -222,7 +223,7 @@ func combineZset(args [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 		scoreKey = NewKeyBuffer(ZScoreKey, args[0], 0)
 	}
 
-	numKeys, err := strconv.Atoi(string(args[1]))
+	numKeys, err := bconv.Atoi(args[1])
 	if err != nil {
 		return InvalidIntError
 	}
@@ -240,7 +241,7 @@ func combineZset(args [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 			if bytes.Equal(bytes.ToLower(args[argOffset]), []byte("weights")) {
 				argOffset += numKeys + 1
 				for i, w := range args[numKeys+3 : argOffset] {
-					weights[i], err = strconv.ParseFloat(string(w), 64)
+					weights[i], err = bconv.ParseFloat(w, 64)
 					if err != nil {
 						return fmt.Errorf("weight value is not a float")
 					}
@@ -568,8 +569,8 @@ func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interf
 		maxExclusive = true
 		args[2] = args[2][1:]
 	}
-	min, err := strconv.ParseFloat(string(args[1]), 64)
-	max, err2 := strconv.ParseFloat(string(args[2]), 64)
+	min, err := bconv.ParseFloat(args[1], 64)
+	max, err2 := bconv.ParseFloat(args[2], 64)
 	if err != nil || err2 != nil {
 		return fmt.Errorf("min or max is not a float")
 	}
@@ -603,8 +604,8 @@ func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interf
 		}
 		if len(args) >= 6 {
 			if bytes.Equal(bytes.ToLower(args[len(args)-3]), []byte("limit")) {
-				offset, err = strconv.ParseInt(string(args[len(args)-2]), 10, 64)
-				total, err2 = strconv.ParseInt(string(args[len(args)-1]), 10, 64)
+				offset, err = bconv.ParseInt(args[len(args)-2], 10, 64)
+				total, err2 = bconv.ParseInt(args[len(args)-1], 10, 64)
 				if err != nil || err2 != nil {
 					return InvalidIntError
 				}
@@ -789,7 +790,7 @@ func btof(b []byte) float64 {
 }
 
 func ftoa(f float64) []byte {
-	b := []byte(strconv.FormatFloat(f, 'g', -1, 64))
+	b := strconv.AppendFloat(nil, f, 'g', -1, 64)
 	if len(b) > 1 && b[1] == 'I' { // -Inf/+Inf to lowercase
 		b[1] = 'i'
 	}
@@ -836,7 +837,7 @@ func readByteSortableFloat(b []byte) float64 {
 }
 
 func ZunionInterKeys(args [][]byte) [][]byte {
-	numKeys, err := strconv.Atoi(string(args[1]))
+	numKeys, err := bconv.Atoi(args[1])
 	// don't return any keys if the response will be a syntax error
 	if err != nil || len(args) < 2+numKeys {
 		return nil

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/jmhodges/levigo"
+	"github.com/titanous/bconv"
 )
 
 // Keys stored in LevelDB for hashes
@@ -171,16 +172,16 @@ func Hincrby(args [][]byte, wb *levigo.WriteBatch) interface{} {
 
 	var current int64
 	if res != nil {
-		current, err = strconv.ParseInt(string(res), 10, 64)
+		current, err = bconv.ParseInt(res, 10, 64)
 		if err != nil {
 			return InvalidIntError
 		}
 	}
-	increment, err := strconv.ParseInt(string(args[2]), 10, 64)
+	increment, err := bconv.ParseInt(args[2], 10, 64)
 	if err != nil {
 		return InvalidIntError
 	}
-	result := []byte(strconv.FormatInt(current+increment, 10))
+	result := strconv.AppendInt(nil, current+increment, 10)
 	wb.Put(key, result)
 
 	// if is a new key, increment the hash length
@@ -204,16 +205,16 @@ func Hincrbyfloat(args [][]byte, wb *levigo.WriteBatch) interface{} {
 
 	var current float64
 	if res != nil {
-		current, err = strconv.ParseFloat(string(res), 64)
+		current, err = bconv.ParseFloat(res, 64)
 		if err != nil {
 			return fmt.Errorf("hash value is not a valid float")
 		}
 	}
-	increment, err := strconv.ParseFloat(string(args[2]), 64)
+	increment, err := bconv.ParseFloat(args[2], 64)
 	if err != nil {
 		return fmt.Errorf("value is not a valid float")
 	}
-	result := []byte(strconv.FormatFloat(current+increment, 'f', -1, 64))
+	result := strconv.AppendFloat(nil, current+increment, 'f', -1, 64)
 	wb.Put(key, result)
 
 	// if is a new key, increment the hash length
