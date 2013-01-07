@@ -137,7 +137,7 @@ func Hmset(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	if added > 0 {
 		setHlen(mk, length+added, wb)
 	}
-	return "OK"
+	return ReplyOK
 }
 
 func Hmget(args [][]byte, wb *levigo.WriteBatch) interface{} {

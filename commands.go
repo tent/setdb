@@ -30,10 +30,18 @@ const (
 	ZCardValue
 )
 
-var InvalidKeyTypeError = fmt.Errorf("Operation against a key holding the wrong kind of value")
-var InvalidDataError = fmt.Errorf("Invalid data")
-var InvalidIntError = fmt.Errorf("value is not an integer or out of range")
-var SyntaxError = fmt.Errorf("syntax error")
+var (
+	InvalidKeyTypeError = fmt.Errorf("Operation against a key holding the wrong kind of value")
+	InvalidDataError    = fmt.Errorf("Invalid data")
+	InvalidIntError     = fmt.Errorf("value is not an integer or out of range")
+	SyntaxError         = fmt.Errorf("syntax error")
+)
+
+var (
+	ReplyOK    = rawReply("+OK\r\n")
+	ReplyPONG  = rawReply("+PONG\r\n")
+	ReplyNOKEY = rawReply("+NOKEY\r\n")
+)
 
 type IOError struct{ error }
 
@@ -44,6 +52,9 @@ type cmdReplyStream struct {
 	items chan interface{} // a multi-bulk reply item, one of nil, []byte, or int
 }
 
+// A raw reply will be returned verbatim to the client
+type rawReply []byte
+
 // cmdFunc response to Redis protocol conversion:
 //
 // string - single line reply, automatically prefixed with "+"
@@ -51,6 +62,7 @@ type cmdReplyStream struct {
 // int - integer number, automatically encoded and prefixed with ":"
 // []byte - bulk reply, automatically prefixed with the length like "$3\r\n"
 // nil, nil []byte - nil response, encoded as "$-1\r\n"
+// rawReply - no serialization, returned verbatim
 // []interface{} - multi-bulk reply, automatically serialized, members can be nil, []byte, or int
 // nil []interface{} - nil multi-bulk reply, serialized as "*-1\r\n"
 // map[string]bool - multi-bulk reply (used by SUNION)
@@ -184,7 +196,7 @@ func (c *cmdDesc) unlockKeys(args [][]byte) {
 var commands = make(map[string]cmdDesc, len(commandList))
 
 func Ping(args [][]byte, wb *levigo.WriteBatch) interface{} {
-	return "PONG"
+	return ReplyPONG
 }
 
 func Echo(args [][]byte, wb *levigo.WriteBatch) interface{} {
@@ -261,7 +273,7 @@ func Keys(args [][]byte, wb *levigo.WriteBatch) interface{} {
 
 // No-op for now
 func Select(args [][]byte, wb *levigo.WriteBatch) interface{} {
-	return "OK"
+	return ReplyOK
 }
 
 func Del(args [][]byte, wb *levigo.WriteBatch) interface{} {

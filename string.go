@@ -27,7 +27,7 @@ func Set(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	setStringLen(mk, len(args[1]), wb)
 	wb.Put(stringKey(args[0]), args[1])
 
-	return "OK"
+	return ReplyOK
 }
 
 func Get(args [][]byte, wb *levigo.WriteBatch) interface{} {

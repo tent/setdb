@@ -238,6 +238,8 @@ func writeReply(w chan<- []byte, reply interface{}) {
 		return
 	}
 	switch reply.(type) {
+	case rawReply:
+		w <- reply.(rawReply)
 	case string:
 		w <- []byte("+" + reply.(string) + "\r\n")
 	case []byte:

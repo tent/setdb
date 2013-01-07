@@ -284,6 +284,11 @@ func (s CommandSuite) TestCommands(c *C) {
 			}
 			res = items
 		}
+		if reply, ok := res.(rawReply); ok {
+			if reply[0] == '+' {
+				res = string(reply[1 : len(reply)-2])
+			}
+		}
 		c.Assert(res, DeepEquals, t.response, Commentf("%s %s, obtained=%s expected=%s", t.command, t.args, res, t.response))
 	}
 }

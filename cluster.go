@@ -20,7 +20,7 @@ func Restore(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	if err != nil {
 		return err
 	}
-	return "OK"
+	return ReplyOK
 }
 
 func Dump(args [][]byte, wb *levigo.WriteBatch) interface{} {
@@ -55,7 +55,7 @@ func Migrate(args [][]byte, wb *levigo.WriteBatch) interface{} {
 		return err
 	}
 	if data == nil {
-		return "NOKEY"
+		return ReplyNOKEY
 	}
 
 	t := time.Duration(timeout) * time.Millisecond
@@ -86,5 +86,5 @@ func Migrate(args [][]byte, wb *levigo.WriteBatch) interface{} {
 		return IOError{fmt.Errorf("error deleting key from local instance: %s", err)}
 	}
 
-	return "OK"
+	return ReplyOK
 }
