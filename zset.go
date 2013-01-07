@@ -238,7 +238,7 @@ func combineZset(args [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 	argOffset := 2 + numKeys
 	if len(args) > argOffset {
 		if len(args) > argOffset+numKeys {
-			if bytes.Equal(bytes.ToLower(args[argOffset]), []byte("weights")) {
+			if EqualIgnoreCase(args[argOffset], []byte("weights")) {
 				argOffset += numKeys + 1
 				for i, w := range args[numKeys+3 : argOffset] {
 					weights[i], err = bconv.ParseFloat(w, 64)
@@ -251,7 +251,7 @@ func combineZset(args [][]byte, op int, wb *levigo.WriteBatch) interface{} {
 			}
 		}
 		if len(args) > argOffset {
-			if len(args) == argOffset+2 && bytes.Equal(bytes.ToLower(args[argOffset]), []byte("aggregate")) {
+			if len(args) == argOffset+2 && EqualIgnoreCase(args[argOffset], []byte("aggregate")) {
 				agg := bytes.ToLower(args[argOffset+1])
 				switch {
 				case bytes.Equal(agg, []byte("sum")):
@@ -479,7 +479,7 @@ func zrange(args [][]byte, reverse bool) interface{} {
 	var withscores bool
 	items := end + 1 - start
 	if len(args) >= 4 {
-		if !bytes.Equal(bytes.ToLower(args[3]), []byte("withscores")) || len(args) > 4 {
+		if !EqualIgnoreCase(args[3], []byte("withscores")) || len(args) > 4 {
 			DB.ReleaseSnapshot(snapshot)
 			opts.Close()
 			return SyntaxError
@@ -596,14 +596,14 @@ func zrangebyscore(args [][]byte, flag zrangeFlag, wb *levigo.WriteBatch) interf
 	var offset, total int64 = 0, -1
 	if flag <= zrangeReverse && len(args) > 3 {
 		if len(args) == 4 || len(args) == 7 {
-			if bytes.Equal(bytes.ToLower(args[3]), []byte("withscores")) {
+			if EqualIgnoreCase(args[3], []byte("withscores")) {
 				withscores = true
 			}
 		} else if len(args) != 6 {
 			return SyntaxError
 		}
 		if len(args) >= 6 {
-			if bytes.Equal(bytes.ToLower(args[len(args)-3]), []byte("limit")) {
+			if EqualIgnoreCase(args[len(args)-3], []byte("limit")) {
 				offset, err = bconv.ParseInt(args[len(args)-2], 10, 64)
 				total, err2 = bconv.ParseInt(args[len(args)-1], 10, 64)
 				if err != nil || err2 != nil {
