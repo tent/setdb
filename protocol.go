@@ -237,29 +237,29 @@ func writeReply(w chan<- []byte, reply interface{}) {
 		w <- []byte("$-1\r\n")
 		return
 	}
-	switch reply.(type) {
+	switch r := reply.(type) {
 	case rawReply:
-		w <- reply.(rawReply)
+		w <- r
 	case string:
-		w <- []byte("+" + reply.(string) + "\r\n")
+		w <- []byte("+" + r + "\r\n")
 	case []byte:
-		writeBulk(w, reply.([]byte))
+		writeBulk(w, r)
 	case int:
-		writeInt(w, int64(reply.(int)))
+		writeInt(w, int64(r))
 	case int64:
-		writeInt(w, reply.(int64))
+		writeInt(w, r)
 	case uint32:
-		writeInt(w, int64(reply.(uint32)))
+		writeInt(w, int64(r))
 	case IOError:
 		w <- []byte("-IOERR " + reply.(IOError).Error() + "\r\n")
 	case error:
-		writeError(w, reply.(error).Error())
+		writeError(w, r.Error())
 	case []interface{}:
-		writeMultibulk(w, reply.([]interface{}))
+		writeMultibulk(w, r)
 	case *cmdReplyStream:
-		writeMultibulkStream(w, reply.(*cmdReplyStream))
+		writeMultibulkStream(w, r)
 	case map[string]bool:
-		writeMultibulkStringMap(w, reply.(map[string]bool))
+		writeMultibulkStringMap(w, r)
 	default:
 		panic("Invalid reply type")
 	}
