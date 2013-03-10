@@ -62,7 +62,6 @@ func stringKey(k []byte) []byte {
 // BITOP
 // DECR
 // DECRBY
-// GET
 // GETBIT
 // GETRANGE
 // GETSET
@@ -73,7 +72,6 @@ func stringKey(k []byte) []byte {
 // MSET
 // MSETNX
 // PSETEX
-// SET
 // SETBIT
 // SETEX
 // SETNX
