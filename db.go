@@ -37,7 +37,6 @@ func maybeFatal(err error) {
 }
 
 func main() {
-	runtime.MemProfileRate = 1
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	openDB()
 	go func() {
