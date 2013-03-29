@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cupcake/rdb"
 	"github.com/garyburd/redigo/redis"
 	"github.com/jmhodges/levigo"
 	"github.com/titanous/bconv"
-	"github.com/titanous/rdb"
 )
 
 func Restore(args [][]byte, wb *levigo.WriteBatch) interface{} {

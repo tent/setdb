@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"math"
 
+	"github.com/cupcake/rdb"
 	"github.com/jmhodges/levigo"
-	"github.com/titanous/rdb"
 )
 
 type rdbDecoder struct {
