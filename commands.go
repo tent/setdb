@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cupcake/setdb/lockring"
 	"github.com/jmhodges/levigo"
 	"github.com/titanous/bconv"
-	"github.com/titanous/setdb/lockring"
 )
 
 var KeyMutex = lockring.New(1024)
