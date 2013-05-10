@@ -11,18 +11,7 @@ import (
 type rdbDecoder struct {
 	wb *levigo.WriteBatch
 	i  int64
-}
-
-func (p *rdbDecoder) StartRDB() {
-}
-
-func (p *rdbDecoder) StartDatabase(n int) {
-}
-
-func (p *rdbDecoder) EndDatabase(n int) {
-}
-
-func (p *rdbDecoder) EndRDB() {
+	rdb.NopDecoder
 }
 
 func (p *rdbDecoder) Set(key, value []byte, expiry int64) {
@@ -40,9 +29,6 @@ func (p *rdbDecoder) Hset(key, field, value []byte) {
 	p.wb.Put(NewKeyBufferWithSuffix(HashKey, key, field).Key(), value)
 }
 
-func (p *rdbDecoder) EndHash(key []byte) {
-}
-
 func (p *rdbDecoder) StartSet(key []byte, cardinality, expiry int64) {
 	Del([][]byte{key}, p.wb)
 	setCard(metaKey(key), uint32(cardinality), p.wb)
@@ -50,9 +36,6 @@ func (p *rdbDecoder) StartSet(key []byte, cardinality, expiry int64) {
 
 func (p *rdbDecoder) Sadd(key, member []byte) {
 	p.wb.Put(NewKeyBufferWithSuffix(SetKey, key, member).Key(), []byte{})
-}
-
-func (p *rdbDecoder) EndSet(key []byte) {
 }
 
 func (p *rdbDecoder) StartList(key []byte, length, expiry int64) {
@@ -68,9 +51,6 @@ func (p *rdbDecoder) Rpush(key, value []byte) {
 	p.wb.Put(k.Key(), value)
 }
 
-func (p *rdbDecoder) EndList(key []byte) {
-}
-
 func (p *rdbDecoder) StartZSet(key []byte, cardinality, expiry int64) {
 	Del([][]byte{key}, p.wb)
 	setZcard(metaKey(key), uint32(cardinality), p.wb)
@@ -84,9 +64,6 @@ func (p *rdbDecoder) Zadd(key []byte, score float64, member []byte) {
 	setZScoreKeyScore(scoreKey, score)
 	p.wb.Put(NewKeyBufferWithSuffix(ZSetKey, key, member).Key(), scoreBytes)
 	p.wb.Put(scoreKey.Key(), []byte{})
-}
-
-func (p *rdbDecoder) EndZSet(key []byte) {
 }
 
 type rdbEncoder struct {
