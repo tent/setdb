@@ -5,13 +5,14 @@ import (
 	"math"
 
 	"github.com/cupcake/rdb"
+	"github.com/cupcake/rdb/nopdecoder"
 	"github.com/jmhodges/levigo"
 )
 
 type rdbDecoder struct {
 	wb *levigo.WriteBatch
 	i  int64
-	rdb.NopDecoder
+	nopdecoder.NopDecoder
 }
 
 func (p *rdbDecoder) Set(key, value []byte, expiry int64) {
