@@ -14,18 +14,13 @@ import (
 // StringKey | key = value
 
 func Set(args [][]byte, wb *levigo.WriteBatch) interface{} {
-	mk := metaKey(args[0])
-	res, err := DB.Get(DefaultReadOptions, mk)
+	k := args[0]
+	v := args[1]
+
+	err := set(k, v, wb)
 	if err != nil {
 		return err
 	}
-	// If there is a non-string key here, let's delete it first
-	if len(res) > 0 && res[0] != StringLengthValue {
-		del(args[0], res[0], wb)
-	}
-
-	setStringLen(mk, len(args[1]), wb)
-	wb.Put(stringKey(args[0]), args[1])
 
 	return ReplyOK
 }
