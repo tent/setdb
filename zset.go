@@ -809,7 +809,7 @@ func ftoa(f float64) []byte {
  * ENCODING
  * If the number is positive, flip the sign (first bit to 1)
  * Else the number is negative, flip all the bits
- * 
+ *
  * DECODING
  * If the first byte is >= 0x80 (0b10000000), decode float, flip the sign
  * Else flip all the bits, decode float

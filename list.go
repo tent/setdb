@@ -82,7 +82,7 @@ func Llen(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	return l.length
 }
 
-// A LPUSH onto a list takes the seq number of the leftmost element, 
+// A LPUSH onto a list takes the seq number of the leftmost element,
 // decrements it and inserts the item.
 func Lpush(args [][]byte, wb *levigo.WriteBatch) interface{} {
 	res, err := lpush(args, true, true, wb)
