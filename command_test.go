@@ -22,13 +22,6 @@ func (s CommandSuite) SetUpSuite(c *C) {
 	openDB()
 }
 
-func MaybeFail(c *C, err error) {
-	if err != nil {
-		c.Log(err)
-		c.FailNow()
-	}
-}
-
 var stringDump, _ = base64.StdEncoding.DecodeString("AAVIZWxsbwYAKiSfaMhQwxA=")
 var hashDump, _ = base64.StdEncoding.DecodeString("BAIGZmllbGQxBUhlbGxvBmZpZWxkMgVXb3JsZAYAgLPX8O51AWE=")
 var setDump, _ = base64.StdEncoding.DecodeString("AgIFSGVsbG8FV29ybGQGADOH1ks5wqwF")
@@ -273,7 +266,7 @@ func (s CommandSuite) TestCommands(c *C) {
 		res := cmd.function(args, wb)
 		if cmd.writes {
 			err := DB.Write(DefaultWriteOptions, wb)
-			MaybeFail(c, err)
+			c.Assert(err, IsNil)
 			wb.Close()
 		}
 		cmd.unlockKeys(args)
