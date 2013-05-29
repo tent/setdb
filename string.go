@@ -14,14 +14,10 @@ import (
 // StringKey | key = value
 
 func Set(args [][]byte, wb *levigo.WriteBatch) interface{} {
-	k := args[0]
-	v := args[1]
-
-	err := set(k, v, wb)
+	err := set(args[0], args[1], wb)
 	if err != nil {
 		return err
 	}
-
 	return ReplyOK
 }
 
