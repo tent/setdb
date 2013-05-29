@@ -27,3 +27,4 @@ setdb
 .vagrant
 Vagrantfile
 tmp/
+*.test
