@@ -109,6 +109,7 @@ var commandList = []cmdDesc{
 	{"rpoplpush", Rpoplpush, 2, true, 0, 1, 0, nil},
 	{"lrange", Lrange, 3, false, 0, 0, 0, nil},
 	{"ping", Ping, 0, false, -1, 0, 0, nil},
+	{"append", Append, 2, true, 0, 0, 0, nil},
 	{"set", Set, 2, true, 0, 0, 0, nil},
 	{"sadd", Sadd, -2, true, 0, 0, 0, nil},
 	{"scard", Scard, 1, false, 0, 0, 0, nil},

@@ -125,6 +125,8 @@ var tests = []struct {
 	{"get", "foo", []byte("bar")},
 	{"set", "foo baz", "OK"},
 	{"get", "foo", []byte("baz")},
+	{"append", "foo qux", 6},
+	{"get", "foo", []byte("bazqux")},
 	{"del", "foo", 1},
 	{"exists", "foo", 0},
 	{"zadd", "asdf 1 bar", uint32(1)},
