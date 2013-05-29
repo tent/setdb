@@ -5,5 +5,5 @@ before_install:
   - cd leveldb-1.10.0
   - make
   - CGO_CFLAGS="-I`pwd`/include" CGO_LDFLAGS="-L`pwd`" go get github.com/jmhodges/levigo
-  - cd ..
+  - cd $TRAVIS_BUILD_DIR
   - go get launchpad.net/gocheck
