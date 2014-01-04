@@ -6,3 +6,17 @@ of memory.
 
 If you have leveldb in a non-standard path (git clone), you need to explicitly set CGO_{C,LD}FLAGS.
 `CGO_CFLAGS="-I/path/to/leveldb/include" CGO_LDFLAGS="-L/path/to/leveldb" go get github.com/cupcake/setdb`
+
+## Running
+
+Get the package
+
+    go get github.com/cupcake/setdb
+
+Run it
+
+    $GOPATH/bin/setdb
+
+Connect with redis client
+
+    redis-cli -p 12345
