@@ -104,7 +104,7 @@ func protocolHandler(c *client) {
 		}
 
 		// check command arity, negative arity means >= n
-		if (command.arity < 0 && len(args)-1 < -command.arity) || (command.arity >= 0 && len(args)-1 > command.arity) {
+		if (command.arity < 0 && len(args)-1 < -command.arity) || (command.arity >= 0 && len(args)-1 < command.arity) {
 			writeError(c.w, "wrong number of arguments for '"+string(args[0])+"' command")
 			return
 		}
